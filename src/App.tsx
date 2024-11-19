@@ -19,15 +19,28 @@ import "@xyflow/react/dist/style.css";
 
 const initialNodes = [
   {
+    id: "game",
+    type: "group",
+    position: { x: 20, y: 20 },
+    style: {
+      width: 200,
+      height: 300,
+    },
+  },
+  {
     id: "1",
-    position: { x: 0, y: 0 },
+    position: { x: 10, y: 10 },
     data: { label: "1" },
+    parentId: "game",
+    extent: "parent",
   },
   {
     id: "2",
     type: "customNode",
-    position: { x: 0, y: 100 },
+    position: { x: 10, y: 80 },
     data: { label: "2" },
+    parentId: "game",
+    extent: "parent",
   },
 ];
 const initialEdges = [{ id: "e1-2", source: "1", target: "2" }];
