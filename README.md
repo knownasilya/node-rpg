@@ -1,10 +1,4 @@
-# React-tauri-vite-template
-
-Simple template to get started with react vite and tauri, note that it has typescript support also, ~~It enables the vite-plugin-tauri, to avoid ghost terminal issue~~.
-
-## why ?
-
-Because it's fun.
+# node-rpg
 
 ## Requirements:
 
@@ -15,21 +9,13 @@ Because it's fun.
 1- install dependencies
 
 ```sh
-#npm
-npm install
-
-#yarn
-yarn
+pnpm install
 ```
 
 2- Run the App in development mode:
 
 ```sh
-#npm
-npm run tauri:dev
-
-#yarn
-yarn tauri:dev
+pnpm tauri:dev
 ```
 
 note that the first run will take time as tauri download and compile dependencies.
@@ -41,15 +27,10 @@ when you are happy with the results and ready to ship your useless app.
 run:
 
 ```sh
-#npm
-npm run tauri:build
-
-#yarn
-yarn tauri:build
+pnpm tauri:build
 ```
 
-## Note:
+## Notes:
 
-tested on:
-
-- windows 10
+Codemirror 6 + https://www.npmjs.com/package/@typescript/vfs
+Some discussion here: https://discuss.codemirror.net/t/codemirror-6-and-typescript-lsp/3398/3
