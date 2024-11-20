@@ -1,21 +1,18 @@
 import "./App.css";
-import React, { useCallback } from "react";
+import React, { createContext, useCallback } from "react";
 import {
-  ReactFlow,
-  MiniMap,
-  Controls,
-  Background,
+  Node,
   useNodesState,
   useEdgesState,
   addEdge,
-  BackgroundVariant,
   OnConnect,
-  NodeProps,
-  Handle,
-  Position,
+  OnEdgesChange,
+  OnNodesChange,
 } from "@xyflow/react";
 
 import "@xyflow/react/dist/style.css";
+import { Engine } from "excalibur";
+import Canvas from "./canvas";
 
 const initialNodes = [
   {
@@ -25,6 +22,18 @@ const initialNodes = [
     style: {
       width: 400,
       height: 250,
+    },
+  },
+  {
+    id: "game-ex",
+    type: "game",
+    position: { x: 10, y: 10 },
+    style: {
+      width: 100,
+      height: 100,
+    },
+    data: {
+      label: "Game",
     },
   },
   {
@@ -42,54 +51,87 @@ const initialNodes = [
     parentId: "game",
     extent: "parent",
   },
+  {
+    id: "3",
+    type: "actor",
+    position: {
+      x: 130,
+      y: 20,
+    },
+    data: { label: "player" },
+  },
 ];
 const initialEdges = [{ id: "e1-2", source: "1", target: "2" }];
 
-const nodeTypes = {
-  customNode: CustomNode,
-};
-
-function CustomNode({ data, selected }: NodeProps) {
-  return (
-    <div
-      style={{
-        padding: 10,
-        border: `1px solid ${selected ? "blue" : "red"}`,
-        borderRadius: 10,
-      }}
+const GameContext = createContext<{
+  engine: Engine | null;
+  setEngine: React.Dispatch<React.SetStateAction<Engine<any> | null>>;
+  nodes: Node[];
+  edges: {
+    id: string;
+    source: string;
+    target: string;
+  }[];
+  setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
+  setEdges: React.Dispatch<
+    React.SetStateAction<
+      {
+        id: string;
+        source: string;
+        target: string;
+      }[]
     >
-      <>
-        {data.label}
-        <Handle type="source" position={Position.Right} />
-        <Handle type="target" position={Position.Left} />
-      </>
-    </div>
-  );
-}
+  >;
+  onNodesChange: OnNodesChange<Node>;
+  onEdgesChange: OnEdgesChange<{
+    id: string;
+    source: string;
+    target: string;
+  }>;
+  onConnect: OnConnect;
+}>({
+  engine: null,
+  setEngine: () => {},
+  nodes: [],
+  edges: [],
+  setNodes: () => {},
+  setEdges: () => {},
+  onNodesChange: () => {},
+  onEdgesChange: () => {},
+  onConnect: () => {},
+});
+export const useGame = () => React.useContext(GameContext);
 
 export default function App() {
+  const [engine, setEngine] = React.useState<Engine | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
   const onConnect: OnConnect = useCallback(
-    (params) => setEdges((eds) => addEdge(params, eds)),
+    (params) => {
+      setEdges((eds) => addEdge(params, eds));
+      console.log("connect", params);
+    },
     [setEdges],
   );
 
   return (
     <div style={{ width: "100vw", height: "100vh" }}>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
+      <GameContext.Provider
+        value={{
+          engine,
+          setEngine,
+          nodes,
+          edges,
+          setEdges,
+          setNodes,
+          onConnect,
+          onEdgesChange,
+          onNodesChange,
+        }}
       >
-        <Controls />
-        <MiniMap pannable={true} zoomable={true} />
-        <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
-      </ReactFlow>
+        <Canvas />
+      </GameContext.Provider>
     </div>
   );
 }
