@@ -46,11 +46,9 @@ function CustomNode({ data, selected }: NodeProps) {
         borderRadius: 10,
       }}
     >
-      <>
-        {data.label}
-        <Handle type="source" position={Position.Right} />
-        <Handle type="target" position={Position.Left} />
-      </>
+      {data.label as string}
+      <Handle type="source" position={Position.Right} />
+      <Handle type="target" position={Position.Left} />
     </div>
   );
 }

@@ -15,19 +15,19 @@ import { Engine } from "excalibur";
 import Canvas from "./canvas";
 
 const initialNodes = [
-  {
-    id: "game",
-    type: "group",
-    position: { x: 120, y: 120 },
-    style: {
-      width: 400,
-      height: 250,
-    },
-  },
+  // {
+  //   id: "game",
+  //   type: "group",
+  //   position: { x: 120, y: 120 },
+  //   style: {
+  //     width: 400,
+  //     height: 250,
+  //   },
+  // },
   {
     id: "game-ex",
     type: "game",
-    position: { x: 10, y: 10 },
+    position: { x: 350, y: 150 },
     style: {
       width: 100,
       height: 100,
@@ -36,26 +36,26 @@ const initialNodes = [
       label: "Game",
     },
   },
-  {
-    id: "1",
-    position: { x: 10, y: 10 },
-    data: { label: "1" },
-    // parentId: "game",
-    // extent: "parent",
-  },
-  {
-    id: "2",
-    type: "customNode",
-    position: { x: 120, y: 80 },
-    data: { label: "2" },
-    parentId: "game",
-    extent: "parent",
-  },
+  // {
+  //   id: "1",
+  //   position: { x: 10, y: 10 },
+  //   data: { label: "1" },
+  //   // parentId: "game",
+  //   // extent: "parent",
+  // },
+  // {
+  //   id: "2",
+  //   type: "customNode",
+  //   position: { x: 120, y: 80 },
+  //   data: { label: "2" },
+  //   parentId: "game",
+  //   extent: "parent",
+  // },
   {
     id: "3",
     type: "actor",
     position: {
-      x: 130,
+      x: 50,
       y: 20,
     },
     data: { label: "player" },

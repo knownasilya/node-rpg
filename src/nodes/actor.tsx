@@ -52,7 +52,10 @@ export default function ActorNode({ id, data, style }: NodeProps) {
 
   // This is the node component, which has two inputs, x and y which change the x and y of the `actor` in the game.
   return (
-    <div style={{ padding: 5, border: "1px solid purple" }}>
+    <div
+      className="flex flex-col gap-2"
+      style={{ padding: 5, border: "1px solid purple" }}
+    >
       {data.label as string}
       <Handle type="target" position={Position.Right} />
 
