@@ -21,31 +21,29 @@ const colors = {
 class Player extends Actor {
   pointerDown = false;
 
-  constructor(args: ActorArgs) {
+  constructor(args: ActorArgs, onUpdate: (actor: Player) => void) {
     super(args);
 
     this.on("pointerdown", (evt) => {
-      console.log("down", evt);
       if (evt.button === PointerButton.Left) {
         this.pointerDown = true;
       }
     });
 
     this.on("pointermove", (evt) => {
-      console.log("move", evt);
       if (this.pointerDown) {
-        console.log(evt);
         this.pos = vec(evt.screenPos.x, evt.screenPos.y);
+        onUpdate(this);
       }
     });
 
     this.on("pointerup", (evt) => {
-      console.log("up", evt);
       if (evt.button === PointerButton.Left) {
         this.pointerDown = false;
       }
     });
   }
+
   // Move the player based on keyboard input
   update(engine: Engine, delta: number) {
     if (engine.input.keyboard.isHeld(Keys.W)) {
@@ -90,14 +88,19 @@ export default function ActorNode({ id, data, style }: NodeProps) {
   useEffect(() => {
     if (!game.engine || !edge || edge.source !== "game-ex") return;
 
-    const actor = new Player({
-      color: color,
-      x: pos.x,
-      y: pos.y,
-      // vel: vec(10, 0),
-      width: 20,
-      height: 20,
-    });
+    const actor = new Player(
+      {
+        color: color,
+        x: pos.x,
+        y: pos.y,
+        // vel: vec(10, 0),
+        width: 20,
+        height: 20,
+      },
+      (p) => {
+        setPos({ x: p.pos.x, y: p.pos.y });
+      },
+    );
     game.engine?.add(actor);
     actorRef.current = actor;
 
