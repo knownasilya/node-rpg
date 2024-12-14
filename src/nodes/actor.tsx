@@ -1,7 +1,7 @@
 import { Handle, NodeProps, Position, useEdges } from "@xyflow/react";
 import { useGame } from "../App";
 import { useEffect, useRef, useState } from "react";
-import { Actor, Color } from "excalibur";
+import { Actor, ActorArgs, Color, Engine, Keys, vec } from "excalibur";
 
 const colors = {
   red: Color.Red,
@@ -9,6 +9,27 @@ const colors = {
   blue: Color.Blue,
   yellow: Color.Yellow,
 } as const;
+
+class Player extends Actor {
+  // Move the player based on keyboard input
+  update(engine: Engine, delta: number) {
+    if (engine.input.keyboard.isHeld(Keys.W)) {
+      this.vel.y = -100;
+    } else if (engine.input.keyboard.isHeld(Keys.S)) {
+      this.vel.y = 100;
+    } else {
+      this.vel.y = 0;
+    }
+
+    if (engine.input.keyboard.isHeld(Keys.A)) {
+      this.vel.x = -100;
+    } else if (engine.input.keyboard.isHeld(Keys.D)) {
+      this.vel.x = 100;
+    } else {
+      this.vel.x = 0;
+    }
+  }
+}
 
 export default function ActorNode({ id, data, style }: NodeProps) {
   const game = useGame();
@@ -34,10 +55,11 @@ export default function ActorNode({ id, data, style }: NodeProps) {
   useEffect(() => {
     if (!game.engine || !edge || edge.source !== "game-ex") return;
 
-    const actor = new Actor({
+    const actor = new Player({
       color: color,
       x: pos.x,
       y: pos.y,
+      // vel: vec(10, 0),
       width: 20,
       height: 20,
     });
