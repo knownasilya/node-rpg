@@ -1,7 +1,15 @@
 import { Handle, NodeProps, Position, useEdges } from "@xyflow/react";
 import { useGame } from "../App";
 import { useEffect, useRef, useState } from "react";
-import { Actor, ActorArgs, Color, Engine, Keys, vec } from "excalibur";
+import {
+  Actor,
+  ActorArgs,
+  Color,
+  Engine,
+  Keys,
+  PointerButton,
+  vec,
+} from "excalibur";
 
 const colors = {
   red: Color.Red,
@@ -11,6 +19,33 @@ const colors = {
 } as const;
 
 class Player extends Actor {
+  pointerDown = false;
+
+  constructor(args: ActorArgs) {
+    super(args);
+
+    this.on("pointerdown", (evt) => {
+      console.log("down", evt);
+      if (evt.button === PointerButton.Left) {
+        this.pointerDown = true;
+      }
+    });
+
+    this.on("pointermove", (evt) => {
+      console.log("move", evt);
+      if (this.pointerDown) {
+        console.log(evt);
+        this.pos = vec(evt.screenPos.x, evt.screenPos.y);
+      }
+    });
+
+    this.on("pointerup", (evt) => {
+      console.log("up", evt);
+      if (evt.button === PointerButton.Left) {
+        this.pointerDown = false;
+      }
+    });
+  }
   // Move the player based on keyboard input
   update(engine: Engine, delta: number) {
     if (engine.input.keyboard.isHeld(Keys.W)) {
