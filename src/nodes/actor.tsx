@@ -1,7 +1,14 @@
 import { Handle, NodeProps, Position, useEdges } from "@xyflow/react";
 import { useGame } from "../App";
-import { act, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Actor, Color } from "excalibur";
+
+const colors = {
+  red: Color.Red,
+  green: Color.Green,
+  blue: Color.Blue,
+  yellow: Color.Yellow,
+} as const;
 
 export default function ActorNode({ id, data, style }: NodeProps) {
   const game = useGame();
@@ -9,6 +16,7 @@ export default function ActorNode({ id, data, style }: NodeProps) {
   const edge = edges.find((ed) => ed.target === id);
   const actorRef = useRef<Actor | null>(null);
   const [pos, setPos] = useState({ x: 10, y: 10 });
+  const [color, setColor] = useState(Color.Red);
 
   useEffect(() => {
     if (actorRef.current) {
@@ -18,10 +26,16 @@ export default function ActorNode({ id, data, style }: NodeProps) {
   }, [pos]);
 
   useEffect(() => {
+    if (actorRef.current) {
+      actorRef.current.color = color;
+    }
+  }, [color]);
+
+  useEffect(() => {
     if (!game.engine || !edge || edge.source !== "game-ex") return;
 
     const actor = new Actor({
-      color: Color.Rose,
+      color: color,
       x: pos.x,
       y: pos.y,
       width: 20,
@@ -34,7 +48,7 @@ export default function ActorNode({ id, data, style }: NodeProps) {
       actor.kill();
       actorRef.current = null;
     };
-  }, [game.engine, edge]);
+  }, [game.engine, edge, color]);
 
   // This is the node component, which has two inputs, x and y which change the x and y of the `actor` in the game.
   return (
@@ -65,6 +79,30 @@ export default function ActorNode({ id, data, style }: NodeProps) {
               setPos((pos) => ({ ...pos, y: +e.target.value }));
             }}
           />
+        </label>
+      </div>
+
+      <div>
+        <label>
+          color:{" "}
+          <select
+            value={Object.keys(colors).find(
+              (c) => colors[c as keyof typeof colors] === color,
+            )}
+            onChange={(e) =>
+              setColor(colors[e.target.value as keyof typeof colors])
+            }
+          >
+            {Object.keys(colors).map((key) => (
+              <option key={key} value={key}>
+                {key}{" "}
+                <span
+                  className="w-2 h-2"
+                  style={{ backgroundColor: key }}
+                ></span>
+              </option>
+            ))}
+          </select>
         </label>
       </div>
     </div>
