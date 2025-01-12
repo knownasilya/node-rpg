@@ -1,4 +1,10 @@
-import { Handle, NodeProps, Position, useEdges } from "@xyflow/react";
+import {
+  Handle,
+  NodeProps,
+  NodeToolbar,
+  Position,
+  useEdges,
+} from "@xyflow/react";
 import { useGame } from "../App";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -67,7 +73,7 @@ class Player extends Actor {
 export default function ActorNode({ id, data, style }: NodeProps) {
   const game = useGame();
   const edges = useEdges();
-  const edge = edges.find((ed) => ed.target === id);
+  const edge = edges.find((ed) => ed.source === id);
   const actorRef = useRef<Actor | null>(null);
   const [pos, setPos] = useState({ x: 10, y: 10 });
   const [color, setColor] = useState(Color.Red);
@@ -86,7 +92,7 @@ export default function ActorNode({ id, data, style }: NodeProps) {
   }, [color]);
 
   useEffect(() => {
-    if (!game.engine || !edge || edge.source !== "game-ex") return;
+    if (!game.engine || !edge || edge.target !== "game-1") return;
 
     const actor = new Player(
       {
@@ -99,9 +105,12 @@ export default function ActorNode({ id, data, style }: NodeProps) {
       },
       (p) => {
         setPos({ x: p.pos.x, y: p.pos.y });
-      },
+      }
     );
     game.engine?.add(actor);
+    game.setEntities((entities) => {
+      return { ...entities, [id]: actor };
+    });
     actorRef.current = actor;
 
     return () => {
@@ -116,8 +125,12 @@ export default function ActorNode({ id, data, style }: NodeProps) {
       className="flex flex-col gap-2"
       style={{ padding: 5, border: "1px solid purple" }}
     >
+      <NodeToolbar isVisible={true} position={Position.Top}>
+        test
+      </NodeToolbar>
+
       {data.label as string}
-      <Handle type="target" position={Position.Right} />
+      <Handle type="source" position={Position.Right} />
 
       <div>
         <label>
@@ -150,7 +163,7 @@ export default function ActorNode({ id, data, style }: NodeProps) {
           color:{" "}
           <select
             value={Object.keys(colors).find(
-              (c) => colors[c as keyof typeof colors] === color,
+              (c) => colors[c as keyof typeof colors] === color
             )}
             onChange={(e) =>
               setColor(colors[e.target.value as keyof typeof colors])

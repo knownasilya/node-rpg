@@ -7,15 +7,18 @@ import {
   NodeProps,
   Handle,
   Position,
+  Panel,
 } from "@xyflow/react";
 import Game from "./nodes/game";
 import { useGame } from "./App";
 import ActorNode from "./nodes/actor";
+import SceneNode from "./nodes/scene";
 
 const nodeTypes = {
   customNode: CustomNode,
   game: Game,
   actor: ActorNode,
+  scene: SceneNode,
 };
 
 export default function Canvas() {
@@ -30,6 +33,7 @@ export default function Canvas() {
       onEdgesChange={game.onEdgesChange}
       onConnect={game.onConnect}
     >
+      <Panel position="top-left">top-left</Panel>
       <Controls />
       <MiniMap pannable={true} zoomable={true} />
       <Background variant={BackgroundVariant.Dots} gap={12} size={1} />

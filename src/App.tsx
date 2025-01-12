@@ -1,5 +1,5 @@
 import "./App.css";
-import React, { createContext, useCallback } from "react";
+import React, { createContext, useCallback, useContext, useState } from "react";
 import {
   Node,
   useNodesState,
@@ -11,10 +11,10 @@ import {
 } from "@xyflow/react";
 
 import "@xyflow/react/dist/style.css";
-import { Engine } from "excalibur";
+import { Engine, Entity, Scene } from "excalibur";
 import Canvas from "./canvas";
 
-const initialNodes = [
+const initialNodes: Node[] = [
   // {
   //   id: "game",
   //   type: "group",
@@ -25,7 +25,7 @@ const initialNodes = [
   //   },
   // },
   {
-    id: "game-ex",
+    id: "game-1",
     type: "game",
     position: { x: 350, y: 150 },
     style: {
@@ -34,6 +34,19 @@ const initialNodes = [
     },
     data: {
       label: "Game",
+    },
+  },
+
+  {
+    id: "scene-1",
+    type: "scene",
+    position: { x: 300, y: 500 },
+    style: {
+      width: 50,
+      height: 40,
+    },
+    data: {
+      label: "Scene 1",
     },
   },
   // {
@@ -52,7 +65,7 @@ const initialNodes = [
   //   extent: "parent",
   // },
   {
-    id: "3",
+    id: "actor-1",
     type: "actor",
     position: {
       x: 50,
@@ -61,11 +74,15 @@ const initialNodes = [
     data: { label: "player" },
   },
 ];
-const initialEdges = [{ id: "e1-2", source: "1", target: "2" }];
+const initialEdges = [{ id: "e-a1-g1", source: "actor-1", target: "game-1" }];
 
 const GameContext = createContext<{
   engine: Engine | null;
   setEngine: React.Dispatch<React.SetStateAction<Engine<any> | null>>;
+  entities: Record<string, Entity | Scene>;
+  setEntities: React.Dispatch<
+    React.SetStateAction<Record<string, Entity | Scene>>
+  >;
   nodes: Node[];
   edges: {
     id: string;
@@ -92,6 +109,8 @@ const GameContext = createContext<{
 }>({
   engine: null,
   setEngine: () => {},
+  entities: {},
+  setEntities: () => {},
   nodes: [],
   edges: [],
   setNodes: () => {},
@@ -100,19 +119,20 @@ const GameContext = createContext<{
   onEdgesChange: () => {},
   onConnect: () => {},
 });
-export const useGame = () => React.useContext(GameContext);
+export const useGame = () => useContext(GameContext);
 
 export default function App() {
-  const [engine, setEngine] = React.useState<Engine | null>(null);
+  const [engine, setEngine] = useState<Engine | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [entities, setEntities] = useState<Record<string, Entity | Scene>>({});
 
   const onConnect: OnConnect = useCallback(
     (params) => {
       setEdges((eds) => addEdge(params, eds));
-      console.log("connect", params);
+      console.log("App:onConnect", params);
     },
-    [setEdges],
+    [setEdges]
   );
 
   return (
@@ -121,6 +141,8 @@ export default function App() {
         value={{
           engine,
           setEngine,
+          entities,
+          setEntities,
           nodes,
           edges,
           setEdges,

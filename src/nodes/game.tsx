@@ -1,16 +1,55 @@
-import { Handle, NodeProps, Position, useEdges } from "@xyflow/react";
-import { Engine, PointerScope } from "excalibur";
+import {
+  Handle,
+  NodeProps,
+  Position,
+  useEdges,
+  useHandleConnections,
+  useNodes,
+} from "@xyflow/react";
+import { Engine, PointerScope, Scene } from "excalibur";
 import { useEffect, useRef } from "react";
 import { useGame } from "../App";
 
-export default function Game({ data, style }: NodeProps) {
+export default function Game({ id, data, style }: NodeProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const game = useGame();
+  const nodes = useNodes();
+  const sourceConnections = useHandleConnections({
+    type: "target",
+  });
+  const scenes = sourceConnections.map((conn) =>
+    nodes.find((n) => n.id === conn.source && n.type === "scene")
+  );
+
+  console.log(scenes);
+
+  useEffect(() => {
+    if (scenes.length && game.engine) {
+      scenes
+        .filter((s) => !!s)
+        .forEach((item) => {
+          if (!item) return;
+
+          const scene = game.entities[item?.id as string] as Scene;
+
+          game.engine?.addScene(item.id as string, scene);
+          game.engine?.goToScene(item.id);
+        });
+    } else {
+      game.engine?.goToScene("root").then(() => {
+        if (!game.engine?.scenes) return;
+        Object.keys(game.engine?.scenes).forEach((key) => {
+          if (key === "root") return;
+          game.engine?.removeScene(key);
+        });
+      });
+    }
+  }, [game.engine, scenes, game.entities]);
 
   useEffect(() => {
     if (ref.current) {
       let engine = new Engine({
-        canvasElementId: "game",
+        canvasElementId: id,
         width: style?.width ?? 200,
         height: style?.height ?? 200,
         pointerScope: PointerScope.Canvas,
@@ -25,11 +64,12 @@ export default function Game({ data, style }: NodeProps) {
     };
   }, [ref]);
 
+  // useEffect(() => {
+  //   console.log(game.edges);
+  // }, [game.edges]);
+
   const width = style?.width ?? 200;
   const height = style?.height ?? 200;
-  const edges = useEdges();
-
-  console.log({ edges });
 
   return (
     <div
@@ -40,9 +80,9 @@ export default function Game({ data, style }: NodeProps) {
       }}
     >
       {data.label as string}
-      <canvas id="game" style={{ width, height }} ref={ref}></canvas>
+      <canvas id={id} style={{ width, height }} ref={ref}></canvas>
 
-      <Handle type="source" position={Position.Left} />
+      <Handle type="target" position={Position.Left} />
     </div>
   );
 }
