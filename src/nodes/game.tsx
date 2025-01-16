@@ -7,7 +7,7 @@ import {
   useNodes,
 } from "@xyflow/react";
 import { Engine, PointerScope, Scene } from "excalibur";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef } from "preact/hooks";
 import { useGame } from "../App";
 
 export default function Game({ id, data, style }: NodeProps) {
@@ -21,16 +21,14 @@ export default function Game({ id, data, style }: NodeProps) {
     nodes.find((n) => n.id === conn.source && n.type === "scene")
   );
 
-  console.log(scenes);
-
   useEffect(() => {
     if (scenes.length && game.engine) {
       scenes
         .filter((s) => !!s)
         .forEach((item) => {
-          if (!item) return;
-
           const scene = game.entities[item?.id as string] as Scene;
+
+          if (game?.engine?.scenes[item.id]) return;
 
           game.engine?.addScene(item.id as string, scene);
           game.engine?.goToScene(item.id);
@@ -40,7 +38,7 @@ export default function Game({ id, data, style }: NodeProps) {
         if (!game.engine?.scenes) return;
         Object.keys(game.engine?.scenes).forEach((key) => {
           if (key === "root") return;
-          game.engine?.removeScene(key);
+          game.engine?.removeScene(game.engine?.scenes[key] as Scene);
         });
       });
     }

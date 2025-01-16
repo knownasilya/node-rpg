@@ -1,5 +1,4 @@
 import "./App.css";
-import React, { createContext, useCallback, useContext, useState } from "react";
 import {
   Node,
   useNodesState,
@@ -9,10 +8,17 @@ import {
   OnEdgesChange,
   OnNodesChange,
 } from "@xyflow/react";
-
 import "@xyflow/react/dist/style.css";
 import { Engine, Entity, Scene } from "excalibur";
 import Canvas from "./canvas";
+import { createContext } from "preact/compat";
+import {
+  useCallback,
+  useState,
+  useContext,
+  StateUpdater,
+  Dispatch,
+} from "preact/hooks";
 
 const initialNodes: Node[] = [
   // {
@@ -27,7 +33,7 @@ const initialNodes: Node[] = [
   {
     id: "game-1",
     type: "game",
-    position: { x: 350, y: 150 },
+    position: { x: 400, y: 150 },
     style: {
       width: 100,
       height: 100,
@@ -40,7 +46,7 @@ const initialNodes: Node[] = [
   {
     id: "scene-1",
     type: "scene",
-    position: { x: 300, y: 500 },
+    position: { x: 300, y: 300 },
     style: {
       width: 50,
       height: 40,
@@ -74,24 +80,25 @@ const initialNodes: Node[] = [
     data: { label: "player" },
   },
 ];
-const initialEdges = [{ id: "e-a1-g1", source: "actor-1", target: "game-1" }];
+const initialEdges = [
+  { id: "e-a1-s1", source: "actor-1", target: "scene-1" },
+  { id: "e-s1-g1", source: "scene-1", target: "game-1" },
+];
 
-const GameContext = createContext<{
+type GameContextType = {
   engine: Engine | null;
-  setEngine: React.Dispatch<React.SetStateAction<Engine<any> | null>>;
+  setEngine: Dispatch<StateUpdater<Engine<any> | null>>;
   entities: Record<string, Entity | Scene>;
-  setEntities: React.Dispatch<
-    React.SetStateAction<Record<string, Entity | Scene>>
-  >;
+  setEntities: Dispatch<StateUpdater<Record<string, Entity | Scene>>>;
   nodes: Node[];
   edges: {
     id: string;
     source: string;
     target: string;
   }[];
-  setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
-  setEdges: React.Dispatch<
-    React.SetStateAction<
+  setNodes: Dispatch<StateUpdater<Node[]>>;
+  setEdges: Dispatch<
+    StateUpdater<
       {
         id: string;
         source: string;
@@ -106,15 +113,17 @@ const GameContext = createContext<{
     target: string;
   }>;
   onConnect: OnConnect;
-}>({
+};
+
+const GameContext = createContext<GameContextType>({
   engine: null,
-  setEngine: () => {},
+  setEngine: (prev) => prev,
   entities: {},
-  setEntities: () => {},
+  setEntities: (prev) => prev,
   nodes: [],
   edges: [],
-  setNodes: () => {},
-  setEdges: () => {},
+  setNodes: (prev) => prev,
+  setEdges: (prev) => prev,
   onNodesChange: () => {},
   onEdgesChange: () => {},
   onConnect: () => {},

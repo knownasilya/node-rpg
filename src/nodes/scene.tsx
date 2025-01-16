@@ -13,14 +13,33 @@ import { useEffect, useRef } from "react";
 import { useGame } from "../App";
 
 export default function SceneNode({ id, data }: NodeProps) {
-  const ref = useRef<Scene>(new Scene());
+  const ref = useRef<Scene>();
   const game = useGame();
   const nodes = useNodes();
 
   useEffect(() => {
+    const scene = new Scene();
+
     game.setEntities((entities) => {
-      return { ...entities, [id]: ref.current };
+      return { ...entities, [id]: scene };
     });
+    ref.current = scene;
+
+    return () => {
+      console.log("killing scene", id);
+      ref.current = undefined;
+
+      game.engine?.goToScene("root");
+
+      // cleanup scene
+      game.engine?.removeScene(scene);
+      scene.clear();
+
+      game.setEntities((entities) => {
+        const { [id]: _, ...rest } = entities;
+        return rest;
+      });
+    };
   }, []);
 
   const sourceConnections = useHandleConnections({
@@ -30,18 +49,18 @@ export default function SceneNode({ id, data }: NodeProps) {
     nodes.find((n) => n.id === conn.source && n.type === "actor")
   );
 
-  console.log(sourceConnections);
-
   useEffect(() => {
     if (actors.length && ref.current) {
       actors.forEach((item) => {
         const actor = game.entities[item?.id as string] as Actor;
-        ref.current.add(actor);
+
+        if (!actor) return;
+        ref.current?.add(actor);
       });
     } else {
-      ref.current.clear();
+      ref.current?.clear();
     }
-  }, [game.engine, actors, game.entities]);
+  }, [game.engine, actors, game.entities, ref.current]);
 
   return (
     <div
