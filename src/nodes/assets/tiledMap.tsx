@@ -188,7 +188,7 @@ export default function TiledMapNode({ id, data }: NodeProps) {
           tileheight: map.tileheight,
         });
         // Tilesets — resolve image and tile-level properties.
-        const baseUrl = new URL(trimmed, window.location.origin);
+        const baseUrl = new URL(trimmed, window.location.origin + import.meta.env.BASE_URL);
         const slices: TilesetSlice[] = [];
         for (const ts of map.tilesets ?? []) {
           if (!ts?.image) continue;
