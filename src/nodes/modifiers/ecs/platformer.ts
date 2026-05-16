@@ -8,6 +8,7 @@ import {
   Scene,
   System,
   SystemType,
+  TileMap,
   TransformComponent,
   Vector,
   vec,
@@ -278,6 +279,7 @@ export class GroundedSystem extends System {
         bottom: b.bottom + 4,
       };
       let grounded = false;
+      // Tagged Actors (graphicGroup floors, walls): standard AABB sweep.
       for (const other of scene.actors) {
         if (other === actor) continue;
         if (!gc.solidTags.some((t) => other.hasTag(t))) continue;
@@ -291,6 +293,66 @@ export class GroundedSystem extends System {
         ) {
           grounded = true;
           break;
+        }
+      }
+      // Tiled TileMaps: TileMap extends Entity (not Actor) and isn't tag-
+      // matched. We sample a few points along the actor's bottom edge for
+      // a tile. If one is solid/non-empty we ground the player AND snap
+      // them out of any overlap with vel.y zeroed — relying purely on
+      // Excalibur's Arcade solver to resolve a TileMap collision was
+      // letting the player gradually tunnel ("quicksand"); the snap +
+      // velocity clamp here is the reliable platformer behavior.
+      let groundTileTopWorldY: number | undefined;
+      if (!grounded) {
+        const tilemaps: TileMap[] = [];
+        for (const ent of scene.entities) {
+          if (ent instanceof TileMap) tilemaps.push(ent);
+        }
+        if (tilemaps.length > 0) {
+          const sampleXs = [
+            b.left + 1,
+            (b.left + b.right) / 2,
+            b.right - 1,
+          ];
+          // Sample two y's: one just below the actor's feet, one a few
+          // pixels inside (catches the "tunneled deeper than the probe"
+          // case when fall velocity exceeds the per-frame probe depth).
+          const sampleYs = [b.bottom + 1, b.bottom - 1, b.bottom + 6];
+          outer: for (const tm of tilemaps) {
+            for (const sy of sampleYs) {
+              for (const sx of sampleXs) {
+                const tile = tm.getTileByPoint(vec(sx, sy));
+                if (!tile?.solid) continue;
+                grounded = true;
+                // The tile's world-space top edge.
+                groundTileTopWorldY = tile.pos.y;
+                break outer;
+              }
+            }
+          }
+        }
+      }
+      // If we found a tile under the player, snap them flush with its top
+      // and clear downward velocity. Without this the player sinks frame-
+      // by-frame because Excalibur's solver only nudges overlap and leaves
+      // gravity-accumulated velocity intact. We gate on vel.y >= 0 so a
+      // jump-in-progress (vel.y < 0) is never clobbered — otherwise the
+      // probe samples (which intentionally extend a few px below the
+      // actor's feet) can still find the tile the player just launched
+      // from on the very next tick, and the snap would yank them back
+      // down to the tile top before they ever leave it.
+      if (grounded && groundTileTopWorldY !== undefined) {
+        const motion = actor.get(MotionComponent);
+        const goingUp = !!motion && motion.vel.y < 0;
+        if (!goingUp) {
+          const h = b.bottom - b.top;
+          const targetCenterY = groundTileTopWorldY - h / 2;
+          if (actor.pos.y > targetCenterY) {
+            actor.pos = vec(actor.pos.x, targetCenterY);
+          }
+          if (motion && motion.vel.y > 0) {
+            motion.vel = vec(motion.vel.x, 0);
+          }
         }
       }
       const wasGrounded = gc.isGrounded;
@@ -457,16 +519,35 @@ export class HitboxSystem extends System {
         );
         if (!hitsOverlap) continue;
         const health = va.get(HealthComponent);
+        // Pin the victim's animation to "hurt" for the iframe window, or
+        // "death" forever when HP runs out. Looked up by constructor name
+        // so this file doesn't pull in modifiers/animation.tsx (which
+        // would create a circular import — animation.tsx → ecs barrel
+        // → platformer.ts).
+        const components: any[] = (va as any).getComponents?.() ?? [];
+        const anim = components.find(
+          (c: any) => c?.constructor?.name === "AnimationComponent",
+        );
+        let died = false;
         if (health) {
           health.current = Math.max(0, health.current - hb.damage);
           if (health.current === 0) {
+            died = true;
+            if (anim?.pin) anim.pin("death", Number.POSITIVE_INFINITY);
             if (health.onZero === "kill" && va instanceof Actor) {
-              va.kill();
+              // Delay the kill so the death pin actually has a tick to
+              // render before the actor is removed from the scene.
+              setTimeout(() => {
+                try {
+                  if (!va.isKilled?.()) va.kill();
+                } catch {}
+              }, 250);
             } else if (health.onZero === "emit" && health.emitEvent) {
               emit(health.emitEvent, { actor: va });
             }
           }
         }
+        if (!died && anim?.pin) anim.pin("hurt", vb.iFrameMs);
         vb.invincibleUntil = now + vb.iFrameMs;
         emit("damage-dealt", { attacker: ha, victim: va, amount: hb.damage });
       }

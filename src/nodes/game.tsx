@@ -7,11 +7,12 @@ import {
   useReactFlow,
   useViewport,
 } from "@xyflow/react";
-import { Engine, PointerScope, Scene } from "excalibur";
+import { Engine, PointerScope, Scene, WebAudio } from "excalibur";
 import { createPortal } from "preact/compat";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { useGame } from "../App";
 import { Button, Field, NodeBody, NodeCard, NodeHeader } from "../ui";
+import { on } from "./modifiers/shared";
 
 export default function Game({ id, data }: NodeProps) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -26,6 +27,14 @@ export default function Game({ id, data }: NodeProps) {
   const scenes = sourceConnections.map((conn) =>
     nodes.find((n) => n.id === conn.source && n.type === "scene")
   );
+  // Counter nodes connected to this game render overlays on the canvas.
+  // Each is just an event-driven integer; the actual subscription happens
+  // here so the lifecycle is tied to the canvas portal.
+  const counterNodes = sourceConnections
+    .map((conn) =>
+      nodes.find((n) => n.id === conn.source && n.type === "counter"),
+    )
+    .filter((n): n is NonNullable<typeof n> => !!n);
 
   const [width, setWidth] = useState<number>(
     (data.width as number | undefined) ?? 320
@@ -98,7 +107,25 @@ export default function Game({ id, data }: NodeProps) {
         pointerScope: PointerScope.Canvas,
       });
       game.setEngine(engine);
+      // Start bare — asset nodes manage their own loading (each Image /
+      // Sound / TiledMap calls `.load()` on mount). Using ex.Loader would
+      // show a fullscreen "PLAY" button overlay that obscures the editor.
       engine.start();
+      // Browsers gate the WebAudio context behind a user gesture. Without
+      // a gesture, Excalibur Sounds you trigger from gameplay events (jump
+      // / land / etc.) never play — only audio kicked off from a button
+      // press in the editor unlocks the context. Listen on the canvas
+      // (and as a fallback the document) for the first interaction and
+      // resume the AudioContext via Excalibur's WebAudio.unlock().
+      const unlockAudio = () => {
+        WebAudio.unlock().catch(() => {});
+        document.removeEventListener("pointerdown", unlockAudio);
+        document.removeEventListener("keydown", unlockAudio);
+        ref.current?.removeEventListener("pointerdown", unlockAudio);
+      };
+      ref.current?.addEventListener("pointerdown", unlockAudio);
+      document.addEventListener("pointerdown", unlockAudio, { once: false });
+      document.addEventListener("keydown", unlockAudio, { once: false });
     }
     return () => {
       game.engine?.stop();
@@ -127,41 +154,70 @@ export default function Game({ id, data }: NodeProps) {
   // mutation in a rAF callback, so a synchronous sync after the state
   // update would still read the pre-zoom bounding rect. A ResizeObserver
   // catches non-transform resizes (panels, window) as a safety net.
+  // Continuously poll the placeholder's bounding rect via rAF. ResizeObserver
+  // doesn't fire for CSS `transform: scale()` (which is how React Flow zooms),
+  // and reading viewport.zoom-deps in a one-shot effect can miss the
+  // transform commit timing. Polling every frame is cheap and reliable.
   useEffect(() => {
-    const sync = () => {
+    let active = true;
+    let last = previewRect;
+    const tick = () => {
+      if (!active) return;
       const el = placeholderRef.current;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      setPreviewRect({ left: r.left, top: r.top, w: r.width, h: r.height });
+      if (el) {
+        const r = el.getBoundingClientRect();
+        if (
+          r.left !== last.left ||
+          r.top !== last.top ||
+          r.width !== last.w ||
+          r.height !== last.h
+        ) {
+          last = { left: r.left, top: r.top, w: r.width, h: r.height };
+          setPreviewRect(last);
+        }
+      }
+      requestAnimationFrame(tick);
     };
-    let rafId = requestAnimationFrame(sync);
-    const onChange = () => {
-      cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(sync);
-    };
-    window.addEventListener("scroll", onChange, true);
-    window.addEventListener("resize", onChange);
-    const ro =
-      typeof ResizeObserver !== "undefined"
-        ? new ResizeObserver(onChange)
-        : undefined;
-    if (ro && placeholderRef.current) ro.observe(placeholderRef.current);
+    const id = requestAnimationFrame(tick);
     return () => {
-      cancelAnimationFrame(rafId);
-      window.removeEventListener("scroll", onChange, true);
-      window.removeEventListener("resize", onChange);
-      ro?.disconnect();
+      active = false;
+      cancelAnimationFrame(id);
     };
-  }, [
-    viewport.x,
-    viewport.y,
-    viewport.zoom,
-    width,
-    height,
-    playMode,
-    myX,
-    myY,
-  ]);
+  }, []);
+
+  // Track each Counter's count. Keyed by counter node id; updated by
+  // event-bus subscriptions in the effect below.
+  const [counterCounts, setCounterCounts] = useState<Record<string, number>>(
+    {},
+  );
+  const counterKey = counterNodes
+    .map((n) => `${n.id}:${(n.data?.eventName as string | undefined) ?? ""}:${(n.data?.resetEventName as string | undefined) ?? ""}`)
+    .join("|");
+  useEffect(() => {
+    const unsubs: Array<() => void> = [];
+    for (const n of counterNodes) {
+      const eventName = ((n.data?.eventName as string | undefined) ?? "").trim();
+      const resetEvent = ((n.data?.resetEventName as string | undefined) ?? "").trim();
+      if (!eventName) continue;
+      unsubs.push(
+        on(eventName, () => {
+          setCounterCounts((c) => ({ ...c, [n.id]: (c[n.id] ?? 0) + 1 }));
+        }),
+      );
+      if (resetEvent) {
+        unsubs.push(
+          on(resetEvent, () => {
+            setCounterCounts((c) => ({ ...c, [n.id]: 0 }));
+          }),
+        );
+      }
+      // Initialize to 0 for newly-connected counters.
+      setCounterCounts((c) =>
+        c[n.id] === undefined ? { ...c, [n.id]: 0 } : c,
+      );
+    }
+    return () => unsubs.forEach((fn) => fn());
+  }, [counterKey, game.resetTick]);
 
   const aspect = width / height;
   const portalStyle: Record<string, any> = playMode
@@ -201,6 +257,7 @@ export default function Game({ id, data }: NodeProps) {
       <NodeCard accent="game" style={{ minWidth: 240 }}>
         <NodeHeader
           title={(data.label as string) ?? "Game"}
+          subtitle="game"
           accent="game"
           onTitleChange={(v) => reactFlow.updateNodeData(id, { label: v })}
           actions={
@@ -210,7 +267,14 @@ export default function Game({ id, data }: NodeProps) {
               </Button>
               <Button
                 variant="primary"
-                onClick={() => setPlayMode(true)}
+                onClick={() => {
+                  // Play button is a guaranteed user gesture — unlock the
+                  // WebAudio context now so in-game sound.play() calls
+                  // (jump SFX, etc.) work on the first event without
+                  // requiring the user to pre-tap a Sound node.
+                  WebAudio.unlock().catch(() => {});
+                  setPlayMode(true);
+                }}
                 title="Play fullscreen"
               >
                 ▶ play
@@ -251,7 +315,61 @@ export default function Game({ id, data }: NodeProps) {
 
       {createPortal(
         <div style={portalStyle}>
-          <canvas id={id} ref={ref} style={canvasStyle} />
+          <div
+            style={{
+              position: "relative",
+              ...(playMode
+                ? {
+                    width: `min(95vw, calc(95vh * ${aspect}))`,
+                    height: `min(95vh, calc(95vw / ${aspect}))`,
+                  }
+                : { width: "100%", height: "100%" }),
+            }}
+          >
+            <canvas id={id} ref={ref} style={canvasStyle} />
+            {counterNodes.map((n) => {
+              const anchor =
+                (n.data?.anchor as
+                  | "top-left"
+                  | "top-right"
+                  | "bottom-left"
+                  | "bottom-right"
+                  | undefined) ?? "top-left";
+              const label = (n.data?.label as string | undefined) ?? "Counter";
+              const color = (n.data?.color as string | undefined) ?? "#ffd700";
+              const count = counterCounts[n.id] ?? 0;
+              const anchorStyle: Record<string, any> = {
+                position: "absolute",
+                padding: "4px 8px",
+                background: "rgba(0, 0, 0, 0.55)",
+                color,
+                fontFamily: "ui-monospace, monospace",
+                fontSize: 14,
+                fontWeight: 700,
+                borderRadius: 4,
+                pointerEvents: "none",
+                textShadow: "0 1px 2px rgba(0,0,0,0.6)",
+              };
+              if (anchor === "top-left") {
+                anchorStyle.top = 8;
+                anchorStyle.left = 8;
+              } else if (anchor === "top-right") {
+                anchorStyle.top = 8;
+                anchorStyle.right = 8;
+              } else if (anchor === "bottom-left") {
+                anchorStyle.bottom = 8;
+                anchorStyle.left = 8;
+              } else {
+                anchorStyle.bottom = 8;
+                anchorStyle.right = 8;
+              }
+              return (
+                <div key={n.id} style={anchorStyle}>
+                  {label}: {count}
+                </div>
+              );
+            })}
+          </div>
           {playMode && (
             <div className="nrpg-game-toolbar">
               <button

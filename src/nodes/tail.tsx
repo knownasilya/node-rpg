@@ -158,6 +158,7 @@ export default function TailNode({ id, data }: NodeProps) {
     <NodeCard accent="follower" style={{ minWidth: 240 }}>
       <NodeHeader
         title={(data.label as string) ?? "Tail"}
+        subtitle="tail"
         accent="follower"
         onTitleChange={(v) => reactFlow.updateNodeData(id, { label: v })}
       />

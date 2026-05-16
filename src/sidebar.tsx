@@ -8,6 +8,11 @@ const LAYOUT_COLUMNS: string[] = [
   "tail",
   "graphicGroup",
   "spawner",
+  "image",
+  "spritesheet",
+  "animation",
+  "sound",
+  "tiledMap",
   "scene",
   "game",
 ];
@@ -18,47 +23,227 @@ const ROW_GAP = 30;
 const FALLBACK_W = 240;
 const FALLBACK_H = 200;
 
-type ItemDef = { kind: string; label: string; accent: Accent };
+type ItemDef = {
+  kind: string;
+  label: string;
+  accent: Accent;
+  description: string;
+};
 
 export const NODE_KINDS: ItemDef[] = [
-  { kind: "graphicGroup", label: "Entity", accent: "entity" },
-  { kind: "actor", label: "Player", accent: "actor" },
-  { kind: "tail", label: "Tail", accent: "follower" },
-  { kind: "spawner", label: "Spawner", accent: "spawner" },
-  { kind: "scene", label: "Scene", accent: "scene" },
+  {
+    kind: "graphicGroup",
+    label: "Entity",
+    accent: "entity",
+    description: "Group of rect/circle shapes with shared tags & collision.",
+  },
+  {
+    kind: "actor",
+    label: "Actor",
+    accent: "actor",
+    description: "An Excalibur Actor. Attach modifiers for behavior.",
+  },
+  {
+    kind: "tail",
+    label: "Tail",
+    accent: "follower",
+    description: "Chain of segments that trails a tagged leader.",
+  },
+  {
+    kind: "spawner",
+    label: "Spawner",
+    accent: "spawner",
+    description: "Spawns instances of a template within a bounded area.",
+  },
+  {
+    kind: "image",
+    label: "Image",
+    accent: "entity",
+    description: "Load a PNG/JPG. Feeds Sprites & Spritesheets.",
+  },
+  {
+    kind: "spritesheet",
+    label: "Spritesheet",
+    accent: "entity",
+    description: "Slice an Image into a grid of frames.",
+  },
+  {
+    kind: "animation",
+    label: "Animation",
+    accent: "entity",
+    description: "Sequence of Spritesheet frames with durations.",
+  },
+  {
+    kind: "sound",
+    label: "Sound",
+    accent: "entity",
+    description: "Load an audio file with preview play/stop.",
+  },
+  {
+    kind: "tiledMap",
+    label: "Tiled Map",
+    accent: "scene",
+    description: "Mount a Tiled .tmj level (tile + object layers) into a Scene.",
+  },
+  {
+    kind: "scene",
+    label: "Scene",
+    accent: "scene",
+    description: "A room. Holds actors, runs systems, configures camera.",
+  },
+  {
+    kind: "counter",
+    label: "Counter",
+    accent: "game",
+    description:
+      "Listens for an event and shows a count over the game canvas.",
+  },
 ];
 
 export const MODIFIER_KINDS: ItemDef[] = [
-  { kind: "inputModifier", label: "Input", accent: "input" },
-  { kind: "movementModifier", label: "Movement", accent: "movement" },
-  { kind: "collisionRuleModifier", label: "Collide", accent: "collision" },
-  { kind: "followerModifier", label: "Follow", accent: "follower" },
+  {
+    kind: "inputModifier",
+    label: "Input",
+    accent: "input",
+    description: "Map WASD/arrows to a requested heading vector.",
+  },
+  {
+    kind: "movementModifier",
+    label: "Movement",
+    accent: "movement",
+    description: "Velocity, grid-step, or heading-based top-down motion.",
+  },
+  {
+    kind: "collisionRuleModifier",
+    label: "Collide",
+    accent: "collision",
+    description: "On collision with a tag, do an action (kill, damage, …).",
+  },
+  {
+    kind: "followerModifier",
+    label: "Follow",
+    accent: "follower",
+    description: "Trail a tagged leader's position with a step delay.",
+  },
   {
     kind: "platformerMovementModifier",
     label: "Platformer",
     accent: "movement",
+    description: "Horizontal accel/friction + air control.",
   },
-  { kind: "gravityModifier", label: "Gravity", accent: "movement" },
-  { kind: "groundModifier", label: "Ground", accent: "collision" },
-  { kind: "jumpModifier", label: "Jump", accent: "movement" },
-  { kind: "cameraFollowModifier", label: "Camera", accent: "scene" },
+  {
+    kind: "gravityModifier",
+    label: "Gravity",
+    accent: "movement",
+    description: "Constant downward acceleration with a max fall speed.",
+  },
+  {
+    kind: "groundModifier",
+    label: "Ground",
+    accent: "collision",
+    description: "Track if this actor is resting on tagged solid bodies.",
+  },
+  {
+    kind: "jumpModifier",
+    label: "Jump",
+    accent: "movement",
+    description: "Hold-to-vary jump with coyote time and input buffer.",
+  },
+  {
+    kind: "cameraFollowModifier",
+    label: "Camera",
+    accent: "scene",
+    description: "Drive scene.camera with deadzone + lerp.",
+  },
+  {
+    kind: "spriteModifier",
+    label: "Sprite",
+    accent: "entity",
+    description: "Replace this actor's graphic with an Image / Sheet frame.",
+  },
+  {
+    kind: "animationModifier",
+    label: "Animation",
+    accent: "entity",
+    description:
+      "Auto-pick idle/run/jump/fall Animation based on motion state.",
+  },
+  {
+    kind: "soundModifier",
+    label: "Sound",
+    accent: "entity",
+    description: "Play a Sound when a named event fires on the bus.",
+  },
+  {
+    kind: "hitboxModifier",
+    label: "Hitbox",
+    accent: "collision",
+    description: "Damage-dealing box (sword swing, projectile, stomp).",
+  },
+  {
+    kind: "hurtboxModifier",
+    label: "Hurtbox",
+    accent: "collision",
+    description: "Damage-taking box. Auto-attaches Health if none.",
+  },
+  {
+    kind: "healthModifier",
+    label: "Health",
+    accent: "collision",
+    description: "HP pool with on-zero action (kill / respawn / emit).",
+  },
+  {
+    kind: "attackModifier",
+    label: "Attack",
+    accent: "collision",
+    description: "Press a key to swing a Hitbox + pin the attack animation.",
+  },
+  {
+    kind: "patrolModifier",
+    label: "Patrol",
+    accent: "movement",
+    description: "Oscillate horizontally between bounds (simple enemy AI).",
+  },
 ];
 
 export const DRAG_MIME = "application/reactflow-kind";
 
-function DraggableItem({ kind, label, accent }: ItemDef) {
+function DraggableItem({
+  kind,
+  label,
+  accent,
+  description,
+  shape = "dot",
+}: ItemDef & { shape?: "dot" | "diamond" }) {
   return (
     <div
       className="nrpg-sidebar-item"
       draggable
-      style={{ ["--accent" as any]: `var(--accent-${accent})` }}
+      style={{
+        ["--accent" as any]: `var(--accent-${accent})`,
+        alignItems: "flex-start",
+      }}
       onDragStart={(e) => {
         e.dataTransfer?.setData(DRAG_MIME, kind);
         if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
       }}
     >
-      <span className="dot" />
-      <span>{label}</span>
+      <span
+        className="dot"
+        style={
+          shape === "diamond"
+            ? {
+                transform: "rotate(45deg)",
+                borderRadius: 2,
+                marginTop: 4,
+              }
+            : { marginTop: 4 }
+        }
+      />
+      <div className="nrpg-sidebar-item-body">
+        <span>{label}</span>
+        <span className="nrpg-sidebar-item-desc">{description}</span>
+      </div>
     </div>
   );
 }
@@ -105,22 +290,29 @@ export default function Sidebar() {
     <div className="nrpg-sidebar">
       <div className="nrpg-sidebar-section">
         <div className="nrpg-sidebar-section-title">Template</div>
-        <div style={{ display: "flex", gap: 4 }}>
-          {TEMPLATE_ORDER.map((name: TemplateName) => {
-            const active = game.template === name;
-            return (
-              <button
-                key={name}
-                className={"nrpg-btn" + (active ? " active" : "")}
-                style={{ flex: 1 }}
-                onClick={() => game.loadTemplate(name)}
-                title={`Load the ${TEMPLATES[name].label} starter graph`}
-              >
-                {TEMPLATES[name].label}
-              </button>
-            );
-          })}
-        </div>
+        <select
+          className="nrpg-select"
+          style={{ width: "100%" }}
+          value={game.template}
+          onChange={(e) =>
+            game.loadTemplate(e.currentTarget.value as TemplateName)
+          }
+          title="Load a starter graph (resets the current one)"
+        >
+          {TEMPLATE_ORDER.map((name: TemplateName) => (
+            <option key={name} value={name}>
+              {TEMPLATES[name].label}
+            </option>
+          ))}
+        </select>
+        <button
+          className="nrpg-btn"
+          onClick={cleanupLayout}
+          style={{ width: "100%", marginTop: 6 }}
+          title="Auto-arrange top-level nodes into columns by type"
+        >
+          ↦ cleanup layout
+        </button>
       </div>
       <div className="nrpg-sidebar-section">
         <div className="nrpg-sidebar-section-title">Nodes</div>
@@ -131,17 +323,9 @@ export default function Sidebar() {
       <div className="nrpg-sidebar-section">
         <div className="nrpg-sidebar-section-title">Modifiers</div>
         {MODIFIER_KINDS.map((m) => (
-          <DraggableItem key={m.kind} {...m} />
+          <DraggableItem key={m.kind} {...m} shape="diamond" />
         ))}
       </div>
-      <button
-        className="nrpg-btn"
-        onClick={cleanupLayout}
-        style={{ width: "100%", marginTop: 4 }}
-        title="Auto-arrange top-level nodes into columns by type"
-      >
-        ↦ cleanup layout
-      </button>
       <div className="nrpg-sidebar-hint">
         Drop a modifier onto an actor; nodes anywhere on the canvas.
       </div>

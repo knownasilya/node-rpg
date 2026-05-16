@@ -1,8 +1,12 @@
 import type { Node } from "@xyflow/react";
 import { snakeNodes, snakeEdges } from "./snake";
 import { platformerNodes, platformerEdges } from "./platformer";
+import {
+  tiledPlatformerNodes,
+  tiledPlatformerEdges,
+} from "./tiledPlatformer";
 
-export type TemplateName = "snake" | "platformer";
+export type TemplateName = "snake" | "platformer" | "tiledPlatformer";
 export type TemplateEdge = { id: string; source: string; target: string };
 export interface Template {
   name: TemplateName;
@@ -24,16 +28,27 @@ export const TEMPLATES: Record<TemplateName, Template> = {
     nodes: platformerNodes,
     edges: platformerEdges,
   },
+  tiledPlatformer: {
+    name: "tiledPlatformer",
+    label: "Tiled Platformer",
+    nodes: tiledPlatformerNodes,
+    edges: tiledPlatformerEdges,
+  },
 };
 
-export const TEMPLATE_ORDER: TemplateName[] = ["snake", "platformer"];
+export const TEMPLATE_ORDER: TemplateName[] = [
+  "snake",
+  "platformer",
+  "tiledPlatformer",
+];
 
 const STORAGE_KEY = "nodeRpgTemplate";
 
 export function readStoredTemplate(): TemplateName {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw === "snake" || raw === "platformer") return raw;
+    if (raw === "snake" || raw === "platformer" || raw === "tiledPlatformer")
+      return raw;
   } catch {}
   return "snake";
 }

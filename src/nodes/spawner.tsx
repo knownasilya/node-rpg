@@ -210,6 +210,7 @@ export default function SpawnerNode({ id, data }: NodeProps) {
     <NodeCard accent="spawner" style={{ minWidth: 240 }}>
       <NodeHeader
         title={(data.label as string) ?? "Spawner"}
+        subtitle="spawner"
         accent="spawner"
         onTitleChange={(v) => reactFlow.updateNodeData(id, { label: v })}
       />

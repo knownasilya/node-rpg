@@ -21,6 +21,7 @@ import {
   getLeaderHistoryPos,
   getAnimation,
   getSound,
+  getSoundBaseVolume,
   recordLeaderPos,
   registerSpawner,
   registerTailGrower,
@@ -236,7 +237,12 @@ function applyRule(actor: Actor, other: Actor, rule: CollisionRule): void {
       const key = (rule.playSoundKey ?? "").trim();
       if (!key) return;
       const snd = getSound(key);
-      if (snd) snd.play(rule.playSoundVolume ?? 1);
+      if (snd) {
+        // Multiply the rule's volume by the Sound node's authored base
+        // volume from the side-registry. Reading snd.volume directly would
+        // compound: Excalibur's snd.play(v) overwrites snd.volume = v.
+        snd.play(getSoundBaseVolume(key) * (rule.playSoundVolume ?? 1));
+      }
       break;
     }
     case "playAnimation": {

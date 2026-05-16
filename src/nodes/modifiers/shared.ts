@@ -1,12 +1,15 @@
 import {
   Actor,
   Animation,
+  CollisionGroup,
+  CollisionGroupManager,
   ImageSource,
   Sound,
   SpriteSheet,
   Vector,
   vec,
 } from "excalibur";
+import { useEffect, useState } from "preact/hooks";
 import { useGame } from "../../App";
 
 export function parseTags(input: string): string[] {
@@ -137,10 +140,49 @@ export function useParentActor(
   return game.entities[parentId] as Actor | undefined;
 }
 
+// Returns every Excalibur Actor associated with the parent React Flow
+// node id. For a single-pos Actor this is just `[primary]`. For a
+// templated Actor (with instances) this is the deduped set of every
+// instance actor under keys like `${parentId}__inst-...`.
+export function useParentActors(parentId: string | undefined): Actor[] {
+  const game = useGame();
+  if (!parentId) return [];
+  const seen = new Set<Actor>();
+  const primary = game.entities[parentId];
+  if (primary instanceof Actor) seen.add(primary);
+  for (const key of Object.keys(game.entities)) {
+    if (!key.startsWith(`${parentId}__inst-`)) continue;
+    const e = game.entities[key];
+    if (e instanceof Actor) seen.add(e);
+  }
+  return Array.from(seen);
+}
+
 export const SLOT_X = 4;
 export const SLOT_GAP = 20;
 export const ACTOR_WIDTH = 240;
 export const SLOT_WIDTH = ACTOR_WIDTH - SLOT_X * 2;
+
+// --- Collision groups -------------------------------------------------
+// Actors tagged "enemy" don't physically push (or get pushed by) actors
+// tagged "player" — the HitboxSystem's AABB checks are unaffected so
+// damage still fires on overlap. Two-pass setup so we can exclude each
+// other's category from the mask without needing mutable masks.
+const ENEMY_GROUP = CollisionGroupManager.create("enemy");
+const PLAYER_GROUP = CollisionGroupManager.create(
+  "player",
+  // Default mask is "everything" — strip out enemy.
+  ~ENEMY_GROUP.category & 0xffffffff,
+);
+
+export function collisionGroupForTags(
+  tags: string[] | undefined,
+): CollisionGroup | undefined {
+  if (!tags || tags.length === 0) return undefined;
+  if (tags.includes("enemy")) return ENEMY_GROUP;
+  if (tags.includes("player")) return PLAYER_GROUP;
+  return undefined;
+}
 
 // --- Event bus ----------------------------------------------------------
 // Tiny typed pub/sub used by platformer systems (e.g. JumpSystem emits
@@ -184,9 +226,11 @@ export function clearAllEventListeners(): void {
 
 // --- Asset registries ---------------------------------------------------
 // Keyed by the React Flow node id of the asset node. Asset nodes register
-// on mount and unregister on unmount. Consumers (modifiers, collision rule
-// actions) read by id. Cleared from App.reset to recover from unmount-order
-// edge cases; modifier unmount cleanups are the primary path.
+// on mount (post-load) and unregister on unmount. Consumers (modifiers,
+// collision rule actions) read by id. A monotonic `assetVersion` bumps on
+// every register/unregister so React consumers can re-run their effects
+// without polling — useful when a Spritesheet registers AFTER the Sprite
+// modifier that consumes it has already mounted.
 
 const imageSources = new Map<string, ImageSource>();
 const spriteSheets = new Map<string, SpriteSheet>();
@@ -196,11 +240,38 @@ const sounds = new Map<string, Sound>();
 // module compiles whether or not the plugin is installed yet.
 const tiledMaps = new Map<string, unknown>();
 
+let assetVersion = 0;
+const assetVersionListeners = new Set<() => void>();
+
+function bumpAssetVersion(): void {
+  assetVersion++;
+  for (const cb of Array.from(assetVersionListeners)) {
+    try {
+      cb();
+    } catch {}
+  }
+}
+
+export function useAssetVersion(): number {
+  const [v, setV] = useState(assetVersion);
+  useEffect(() => {
+    const cb = () => setV(assetVersion);
+    assetVersionListeners.add(cb);
+    // Pick up any version bumps that happened between render and subscribe.
+    if (v !== assetVersion) setV(assetVersion);
+    return () => {
+      assetVersionListeners.delete(cb);
+    };
+  }, []);
+  return v;
+}
+
 export function registerImage(id: string, image: ImageSource): void {
   imageSources.set(id, image);
+  bumpAssetVersion();
 }
 export function unregisterImage(id: string): void {
-  imageSources.delete(id);
+  if (imageSources.delete(id)) bumpAssetVersion();
 }
 export function getImage(id: string): ImageSource | undefined {
   return imageSources.get(id);
@@ -208,9 +279,10 @@ export function getImage(id: string): ImageSource | undefined {
 
 export function registerSpritesheet(id: string, sheet: SpriteSheet): void {
   spriteSheets.set(id, sheet);
+  bumpAssetVersion();
 }
 export function unregisterSpritesheet(id: string): void {
-  spriteSheets.delete(id);
+  if (spriteSheets.delete(id)) bumpAssetVersion();
 }
 export function getSpritesheet(id: string): SpriteSheet | undefined {
   return spriteSheets.get(id);
@@ -218,9 +290,10 @@ export function getSpritesheet(id: string): SpriteSheet | undefined {
 
 export function registerAnimation(id: string, anim: Animation): void {
   animations.set(id, anim);
+  bumpAssetVersion();
 }
 export function unregisterAnimation(id: string): void {
-  animations.delete(id);
+  if (animations.delete(id)) bumpAssetVersion();
 }
 export function getAnimation(id: string): Animation | undefined {
   return animations.get(id);
@@ -228,19 +301,35 @@ export function getAnimation(id: string): Animation | undefined {
 
 export function registerSound(id: string, sound: Sound): void {
   sounds.set(id, sound);
+  bumpAssetVersion();
 }
 export function unregisterSound(id: string): void {
-  sounds.delete(id);
+  if (sounds.delete(id)) bumpAssetVersion();
+  soundBaseVolumes.delete(id);
 }
 export function getSound(id: string): Sound | undefined {
   return sounds.get(id);
 }
 
+// A separate registry for each Sound node's authored base volume — read
+// by consumers (sound modifier, playSound collision action) when they
+// trigger plays. Reading from sound.volume directly didn't work because
+// Excalibur's `snd.play(v)` overwrites snd.volume with v, so each
+// subsequent play multiplied a progressively smaller base.
+const soundBaseVolumes = new Map<string, number>();
+export function setSoundBaseVolume(id: string, volume: number): void {
+  soundBaseVolumes.set(id, volume);
+}
+export function getSoundBaseVolume(id: string): number {
+  return soundBaseVolumes.get(id) ?? 1;
+}
+
 export function registerTiledMap(id: string, map: unknown): void {
   tiledMaps.set(id, map);
+  bumpAssetVersion();
 }
 export function unregisterTiledMap(id: string): void {
-  tiledMaps.delete(id);
+  if (tiledMaps.delete(id)) bumpAssetVersion();
 }
 export function getTiledMap(id: string): unknown {
   return tiledMaps.get(id);

@@ -208,6 +208,7 @@ export default function GraphicGroupNode({ id, data }: NodeProps) {
     <NodeCard accent="entity" style={{ minWidth: 260 }}>
       <NodeHeader
         title={(data.label as string) ?? "Entity"}
+        subtitle="entity"
         accent="entity"
         onTitleChange={(v) => reactFlow.updateNodeData(id, { label: v })}
         actions={

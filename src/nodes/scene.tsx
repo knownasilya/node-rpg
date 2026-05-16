@@ -11,21 +11,25 @@ import {
   Field,
   NodeBody,
   NodeCard,
+  NodeConnections,
   NodeHeader,
   SectionLabel,
   Toggle,
 } from "../ui";
 import {
   Actor,
+  BodyComponent,
   Canvas,
   CollisionType,
   Color,
   Scene,
+  TileMap,
   vec,
 } from "excalibur";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { useGame } from "../App";
 import { registerEcsSystems } from "./modifiers/ecs";
+import { getTiledMap, useAssetVersion } from "./modifiers/shared";
 
 const bgColors = {
   black: Color.Black,
@@ -223,30 +227,203 @@ export default function SceneNode({ id, data }: NodeProps) {
   );
   const actors = connectedNodes;
 
+  // Tiled maps connected to this scene. Each one's tile + object layers are
+  // mounted into the Excalibur Scene once the resource finishes loading.
+  // Per-map placement (posX/posY) flows through from the TiledMap node's data
+  // so the user can position the map inside the scene.
+  const tiledMapNodes = sourceConnections
+    .map((c) => nodes.find((n) => n.id === c.source && n.type === "tiledMap"))
+    .filter((n): n is NonNullable<typeof n> => !!n);
+  const tiledMapIds = tiledMapNodes.map((n) => n.id);
+  const tiledMapKey = tiledMapNodes
+    .map((n) => {
+      const px = (n.data?.posX as number | undefined) ?? 0;
+      const py = (n.data?.posY as number | undefined) ?? 0;
+      return `${n.id}@${px},${py}`;
+    })
+    .join(",");
+  const assetVersion = useAssetVersion();
+
   useEffect(() => {
     if (connectedNodes.length && sceneRef.current) {
       connectedNodes.forEach((item) => {
-        const actor = game.entities[item?.id as string] as Actor;
-
-        if (!actor) return;
-        // Skip if already in this scene (avoid duplicate add) or if the actor
-        // has been killed. Excalibur's `scene.add` flips isActive back to true
-        // on a killed entity, which was reviving dead actors on every render.
-        if (actor.scene === sceneRef.current) return;
-        if (actor.isKilled?.()) return;
-        // If another scene already owns this actor (e.g. switchScene migrated
-        // the player out of us), don't yank them back. The cross-scene mover
-        // is responsible for placing them.
-        if (actor.scene && actor.scene !== sceneRef.current) return;
-        sceneRef.current?.add(actor);
+        if (!item) return;
+        // Collect every Excalibur Actor associated with this React Flow
+        // node: the primary at entities[id] plus any instance actors
+        // stored under `${id}__inst-...` (when the Actor is templated).
+        const candidates = new Set<Actor>();
+        const primary = game.entities[item.id];
+        if (primary instanceof Actor) candidates.add(primary);
+        for (const key of Object.keys(game.entities)) {
+          if (!key.startsWith(`${item.id}__inst-`)) continue;
+          const e = game.entities[key];
+          if (e instanceof Actor) candidates.add(e);
+        }
+        for (const actor of candidates) {
+          if (actor.scene === sceneRef.current) continue;
+          if (actor.isKilled?.()) continue;
+          if (actor.scene && actor.scene !== sceneRef.current) continue;
+          sceneRef.current?.add(actor);
+        }
       });
     }
   }, [game.engine, connectedNodes, game.entities]);
+
+  // Mount any connected Tiled maps. We await the resource's load promise
+  // (idempotent — the asset node also kicks off load on its own), then
+  // call the plugin's addToScene helper. Re-runs when assetVersion bumps so
+  // a tmx that registered AFTER the scene mounted still gets picked up.
+  // Tracks already-mounted ids to avoid double-mounting the same map.
+  const mountedTiledRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene || tiledMapIds.length === 0) return;
+    let cancelled = false;
+    // No awaits: each iteration is a single synchronous decision. If the
+    // tmx isn't loaded yet, we skip it — the asset node bumps assetVersion
+    // when load completes, which re-fires this effect. This sidesteps a
+    // race where a long `await tmx.load()` could be cancelled mid-flight
+    // (when game.engine flips or another assetVersion bump arrives),
+    // leaving the map silently un-mounted.
+    for (const node of tiledMapNodes) {
+      if (cancelled) break;
+      if (mountedTiledRef.current.has(node.id)) continue;
+      const tmx = getTiledMap(node.id) as any;
+      if (!tmx) continue;
+      // Wait until the resource has actually parsed its layers, not just
+      // until isLoaded() reports true — those can race (especially on a
+      // hard refresh) and we'd mark the map mounted while the layer list
+      // is still empty, leaving the canvas blank forever.
+      if (!Array.isArray(tmx.layers) || tmx.layers.length === 0) continue;
+      const px = (node.data?.posX as number | undefined) ?? 0;
+      const py = (node.data?.posY as number | undefined) ?? 0;
+      try {
+        // Excalibur's scene.add() is deferred (entities are processed on
+        // the next world tick). We trust addToScene to do its job and rely
+        // on mountedTiledRef so we never call it twice for the same
+        // resource. The manual layer loop is only a fallback when the
+        // plugin's helper is missing entirely.
+        if (typeof tmx.addToScene === "function") {
+          tmx.addToScene(scene, { pos: vec(px, py) });
+        }
+        // Restore the .tmj layer order as Excalibur z-index — Tiled lists
+        // layers bottom-first (the file's first layer renders BEHIND the
+        // later ones). Excalibur's default z is 0 for all tilemaps; the
+        // plugin doesn't always respect Tiled order. Setting z by index
+        // makes the background render behind the ground / actors.
+        if (Array.isArray(tmx.layers)) {
+          for (let idx = 0; idx < tmx.layers.length; idx++) {
+            const layer = tmx.layers[idx];
+            const tm: TileMap | undefined = layer?.tilemap;
+            if (!tm) continue;
+            // Negative z keeps tiled tilemaps behind actors (which default
+            // to z=0); inside that band, layer-order is preserved.
+            (tm as any).z = idx - tmx.layers.length;
+          }
+        }
+        // For each tile layer, set the tilemap's body to Fixed so the
+        // Arcade solver pushes the player out cleanly. Only force
+        // tile.solid=true on layers that opt in via the Tiled layer
+        // property `solid: true` — purely-decorative layers (e.g. the
+        // background) must not become walkable. We still mark Fixed on
+        // every tilemap because a Fixed tilemap with no solid tiles is
+        // harmless: nothing collides.
+        if (Array.isArray(tmx.layers)) {
+          for (const layer of tmx.layers) {
+            const tilemap: TileMap | undefined = layer?.tilemap;
+            if (!tilemap) continue;
+            const body = tilemap.get(BodyComponent);
+            if (body) body.collisionType = CollisionType.Fixed;
+            const isSolidLayer = !!(
+              layer?.properties &&
+              (typeof layer.properties.get === "function"
+                ? layer.properties.get("solid") === true
+                : (layer.properties as any).solid === true)
+            );
+            if (!isSolidLayer) continue;
+            for (const tile of tilemap.tiles) {
+              if (tile.getGraphics().length > 0) tile.solid = true;
+            }
+            (tilemap as any).flagCollidersDirty?.();
+          }
+        }
+        if (typeof tmx.addToScene !== "function" && Array.isArray(tmx.layers)) {
+          for (const layer of tmx.layers) {
+            if (layer?.tilemap) {
+              const tilemap = layer.tilemap as any;
+              if (tilemap.pos && typeof tilemap.pos.add === "function") {
+                tilemap.pos = tilemap.pos.add(vec(px, py));
+              }
+              scene.add(tilemap);
+            } else if (Array.isArray(layer?.entities)) {
+              for (const ent of layer.entities) {
+                scene.add(ent);
+              }
+            }
+          }
+        }
+        mountedTiledRef.current.add(node.id);
+        console.info(
+          `[scene:${id}] mounted Tiled map ${node.id} at (${px}, ${py}); layers=${tmx.layers?.length ?? "?"}`,
+        );
+        // Project the .tmj's object-layer entries into Actor `instances`.
+        // For each object with a Tiled `class` (e.g. "player", "slime"),
+        // look up the React Flow Actor tagged `tiled-template:<class>`
+        // and call updateNodeData to set `data.instances` to the full
+        // list of positions for that class. The actor's own effect then
+        // recreates the right number of Excalibur Actors at those world
+        // positions. Works for both single-spawn (player) and
+        // multi-spawn (enemies) templates from one mechanism.
+        const tiledMap: any = (tmx as any).map;
+        const rawLayers: any[] = tiledMap?.layers ?? [];
+        const byClass: Record<
+          string,
+          Array<{ id: string; x: number; y: number }>
+        > = {};
+        for (const layer of rawLayers) {
+          if (layer?.type !== "objectgroup") continue;
+          const objects: any[] = layer.objects ?? [];
+          for (const obj of objects) {
+            const cls = (obj?.class || obj?.type || "").trim();
+            if (!cls) continue;
+            const w = obj.width ?? 0;
+            const h = obj.height ?? 0;
+            const wx = px + (obj.x ?? 0) + w / 2;
+            const wy = py + (obj.y ?? 0) + h / 2;
+            const list = byClass[cls] ?? (byClass[cls] = []);
+            list.push({ id: `tmj-${cls}-${obj.id ?? list.length}`, x: wx, y: wy });
+          }
+        }
+        for (const [cls, positions] of Object.entries(byClass)) {
+          const tag = `tiled-template:${cls}`;
+          const actorNode = nodes.find(
+            (n) =>
+              n.type === "actor" &&
+              Array.isArray((n.data as any)?.tags) &&
+              ((n.data as any).tags as string[]).includes(tag),
+          );
+          if (!actorNode) continue;
+          reactFlow.updateNodeData(actorNode.id, { instances: positions });
+        }
+      } catch (err) {
+        console.warn(`[scene:${id}] tiled mount failed`, node.id, err);
+      }
+    }
+    return () => {
+      cancelled = true;
+    };
+    // game.entities is in deps because the scene-creation effect sets
+    // `sceneRef.current` AND calls game.setEntities — including it makes
+    // this effect re-run once the new scene is actually mounted, closing
+    // the timing window where the tiled effect ran first with a null
+    // sceneRef and silently skipped.
+  }, [game.engine, tiledMapKey, assetVersion, game.entities, game.resetTick]);
 
   return (
     <NodeCard accent="scene" style={{ minWidth: 240 }}>
       <NodeHeader
         title={(data.label as string) ?? "Scene"}
+        subtitle="scene"
         accent="scene"
         onTitleChange={(v) => reactFlow.updateNodeData(id, { label: v })}
         actions={
@@ -257,6 +434,11 @@ export default function SceneNode({ id, data }: NodeProps) {
       />
       <Handle type="target" position={Position.Left} />
       <Handle type="source" position={Position.Right} />
+      <NodeConnections
+        nodeId={id}
+        inputs={["Actor", "Entity", "Tail", "Tiled Map"]}
+        outputs={["Game"]}
+      />
 
       {editMode ? (
         <div style={{ padding: 10 }}>
@@ -271,6 +453,11 @@ export default function SceneNode({ id, data }: NodeProps) {
             cameraY={cameraY}
             cameraZoom={cameraZoom}
             actors={actors.filter((a): a is NonNullable<typeof a> => !!a)}
+            groups={connectedNodes.filter(
+              (n): n is NonNullable<typeof n> =>
+                !!n && n.type === "graphicGroup",
+            )}
+            tiledMaps={tiledMapNodes}
             engineDrawWidth={game.engine?.drawWidth}
             engineDrawHeight={game.engine?.drawHeight}
           />
@@ -374,6 +561,8 @@ export default function SceneNode({ id, data }: NodeProps) {
   );
 }
 
+type NodeLike = { id: string; data?: Record<string, unknown> };
+
 function SceneEditView(props: {
   width: number;
   height: number;
@@ -384,12 +573,17 @@ function SceneEditView(props: {
   cameraX: number;
   cameraY: number;
   cameraZoom: number;
-  actors: { id: string; data?: Record<string, unknown> }[];
+  actors: NodeLike[];
+  groups: NodeLike[];
+  tiledMaps: NodeLike[];
   engineDrawWidth?: number;
   engineDrawHeight?: number;
 }) {
-  const display = 220;
-  const scale = Math.min(display / props.width, display / props.height);
+  // Wide-format preview fits common 16:9 / 8:3 scene aspect ratios. Both
+  // dimensions are scaled so the entire scene fits inside the box.
+  const previewW = 280;
+  const previewH = 180;
+  const scale = Math.min(previewW / props.width, previewH / props.height);
   const roomW = props.width * scale;
   const roomH = props.height * scale;
 
@@ -415,11 +609,29 @@ function SceneEditView(props: {
     }
   }
 
+  type ShapeRect = {
+    kind: "rect";
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    color: string;
+  };
+  type ShapeCircle = {
+    kind: "circle";
+    x: number;
+    y: number;
+    r: number;
+    color: string;
+  };
+  type Shape = ShapeRect | ShapeCircle;
+
   return (
     <svg
       className="nrpg-edit-canvas"
-      width={display}
-      height={display}
+      width={roomW}
+      height={roomH}
+      style={{ display: "block" }}
     >
       <rect
         x={0}
@@ -439,19 +651,89 @@ function SceneEditView(props: {
           strokeWidth={1}
         />
       ))}
+      {/* Tiled maps — draw a labeled rectangle at the configured pos with the
+        nominal map size. Tells the user where the tiles SHOULD render. */}
+      {props.tiledMaps.map((m) => {
+        const px = (m.data?.posX as number | undefined) ?? 0;
+        const py = (m.data?.posY as number | undefined) ?? 0;
+        // We don't know the tile size from React Flow data alone; estimate
+        // 320×192 (the bundled level-1) as a hint when no width is provided.
+        // The runtime mount uses the real .tmj dimensions either way.
+        const mw = (m.data?.widthPx as number | undefined) ?? 320;
+        const mh = (m.data?.heightPx as number | undefined) ?? 192;
+        return (
+          <g key={m.id}>
+            <rect
+              x={px * scale}
+              y={py * scale}
+              width={mw * scale}
+              height={mh * scale}
+              fill="rgba(99, 102, 241, 0.15)"
+              stroke="rgb(99, 102, 241)"
+              strokeWidth={1}
+              strokeDasharray="2 2"
+            />
+            <text
+              x={px * scale + 4}
+              y={py * scale + 10}
+              fontSize={9}
+              fill="rgb(99, 102, 241)"
+              fontFamily="ui-monospace, monospace"
+            >
+              {(m.data?.label as string) ?? "tiled"}
+            </text>
+          </g>
+        );
+      })}
+      {/* GraphicGroups — render each shape at its world position. */}
+      {props.groups.map((g) => {
+        const gx = (g.data?.groupX as number | undefined) ?? 0;
+        const gy = (g.data?.groupY as number | undefined) ?? 0;
+        const shapes = (g.data?.shapes as Shape[] | undefined) ?? [];
+        return shapes.map((s, i) => {
+          if (s.kind === "rect") {
+            return (
+              <rect
+                key={`${g.id}-${i}`}
+                x={(gx + s.x - s.w / 2) * scale}
+                y={(gy + s.y - s.h / 2) * scale}
+                width={s.w * scale}
+                height={s.h * scale}
+                fill={s.color ?? "gray"}
+                stroke="white"
+                strokeOpacity={0.3}
+                strokeWidth={0.5}
+              />
+            );
+          }
+          return (
+            <circle
+              key={`${g.id}-${i}`}
+              cx={(gx + s.x) * scale}
+              cy={(gy + s.y) * scale}
+              r={Math.max(1, (s as ShapeCircle).r * scale)}
+              fill={s.color ?? "red"}
+              stroke="white"
+              strokeOpacity={0.3}
+              strokeWidth={0.5}
+            />
+          );
+        });
+      })}
       {props.actors.map((actor) => {
         const pos = (actor.data?.pos as { x: number; y: number } | undefined) ?? {
           x: 10,
           y: 10,
         };
         const colorName = (actor.data?.color as string | undefined) ?? "red";
+        const sz = Math.max(4, 8 * scale);
         return (
           <rect
             key={actor.id}
-            x={pos.x * scale - 3}
-            y={pos.y * scale - 3}
-            width={6}
-            height={6}
+            x={pos.x * scale - sz / 2}
+            y={pos.y * scale - sz / 2}
+            width={sz}
+            height={sz}
             fill={colorName}
             stroke="white"
             strokeWidth={0.5}

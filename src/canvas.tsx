@@ -27,6 +27,20 @@ import GroundModifier from "./nodes/modifiers/ground";
 import JumpModifier from "./nodes/modifiers/jump";
 import PlatformerMovementModifier from "./nodes/modifiers/platformerMovement";
 import CameraFollowModifier from "./nodes/modifiers/cameraFollow";
+import SpriteModifier from "./nodes/modifiers/sprite";
+import AnimationModifier from "./nodes/modifiers/animation";
+import SoundModifier from "./nodes/modifiers/sound";
+import HitboxModifier from "./nodes/modifiers/hitbox";
+import HurtboxModifier from "./nodes/modifiers/hurtbox";
+import HealthModifier from "./nodes/modifiers/health";
+import AttackModifier from "./nodes/modifiers/attack";
+import PatrolModifier from "./nodes/modifiers/patrol";
+import ImageNode from "./nodes/assets/image";
+import SpritesheetNode from "./nodes/assets/spritesheet";
+import AnimationNode from "./nodes/assets/animation";
+import SoundNode from "./nodes/assets/sound";
+import TiledMapNode from "./nodes/assets/tiledMap";
+import CounterNode from "./nodes/counter";
 import { SLOT_WIDTH } from "./nodes/modifiers/shared";
 import Sidebar, { DRAG_MIME, MODIFIER_KINDS, NODE_KINDS } from "./sidebar";
 
@@ -47,6 +61,20 @@ const nodeTypes = {
   jumpModifier: JumpModifier,
   platformerMovementModifier: PlatformerMovementModifier,
   cameraFollowModifier: CameraFollowModifier,
+  spriteModifier: SpriteModifier,
+  animationModifier: AnimationModifier,
+  soundModifier: SoundModifier,
+  hitboxModifier: HitboxModifier,
+  hurtboxModifier: HurtboxModifier,
+  healthModifier: HealthModifier,
+  attackModifier: AttackModifier,
+  patrolModifier: PatrolModifier,
+  image: ImageNode,
+  spritesheet: SpritesheetNode,
+  animation: AnimationNode,
+  sound: SoundNode,
+  tiledMap: TiledMapNode,
+  counter: CounterNode,
 };
 
 const modifierDefaults: Record<string, Record<string, unknown>> = {
@@ -86,6 +114,50 @@ const modifierDefaults: Record<string, Record<string, unknown>> = {
     offsetX: 0,
     offsetY: 0,
   },
+  spriteModifier: {
+    imageNodeId: "",
+    spritesheetNodeId: "",
+    frameIndex: 0,
+  },
+  animationModifier: {
+    states: { idle: "", run: "", jump: "", fall: "" },
+  },
+  soundModifier: {
+    soundNodeId: "",
+    eventName: "player-jumped",
+    volume: 1,
+  },
+  hitboxModifier: {
+    shapes: [{ x: -8, y: -8, w: 16, h: 16 }],
+    damage: 1,
+    targetTags: ["enemy"],
+    active: true,
+  },
+  hurtboxModifier: {
+    shapes: [{ x: -10, y: -10, w: 20, h: 20 }],
+    tags: ["player"],
+    iFrameMs: 300,
+  },
+  healthModifier: {
+    max: 3,
+    onZero: "kill",
+    emitEvent: "",
+  },
+  attackModifier: {
+    attackKey: "KeyX",
+    durationMs: 250,
+    damage: 1,
+    reach: 18,
+    boxHeight: 16,
+    targetTags: ["enemy"],
+    emitEvent: "player-attacked",
+  },
+  patrolModifier: {
+    speed: 40,
+    range: 48,
+    startDirection: "right",
+    pauseAtTurnMs: 0,
+  },
 };
 
 const nodeDefaults: Record<string, Record<string, unknown>> = {
@@ -124,6 +196,31 @@ const nodeDefaults: Record<string, Record<string, unknown>> = {
     boundsY: 20,
     boundsW: 360,
     boundsH: 360,
+  },
+  image: { label: "Image", src: "" },
+  spritesheet: {
+    label: "Spritesheet",
+    columns: 4,
+    rows: 1,
+    frameWidth: 32,
+    frameHeight: 32,
+    margin: 0,
+    spacing: 0,
+  },
+  animation: {
+    label: "Animation",
+    frames: [0, 1, 2, 3],
+    frameDurationMs: 100,
+    strategy: "loop",
+  },
+  sound: { label: "Sound", src: "", volume: 1, loop: false },
+  tiledMap: { label: "Tiled Map", src: "", spawnObjects: true },
+  counter: {
+    label: "Coins",
+    eventName: "coin-collected",
+    resetEventName: "",
+    anchor: "top-left",
+    color: "#ffd700",
   },
 };
 
@@ -249,6 +346,13 @@ function FlowCanvas() {
       onDragOver={onDragOver}
       onDrop={onDrop}
       onNodeDragStop={onNodeDragStop}
+      defaultEdgeOptions={{
+        // Render small filled circles at both endpoints of every edge —
+        // visually anchors the line at the source/target handles even
+        // when those handles are small dots themselves.
+        markerStart: "url(#edge-dot)",
+        markerEnd: "url(#edge-dot)",
+      }}
     >
       <Panel position="top-left">top-left</Panel>
       <Controls />
@@ -261,6 +365,26 @@ function FlowCanvas() {
 export default function Canvas() {
   return (
     <ReactFlowProvider>
+      {/* Marker defs referenced by defaultEdgeOptions in FlowCanvas. The
+        SVG itself has zero size so it doesn't affect layout. */}
+      <svg
+        aria-hidden="true"
+        style={{ position: "absolute", width: 0, height: 0, pointerEvents: "none" }}
+      >
+        <defs>
+          <marker
+            id="edge-dot"
+            viewBox="-5 -5 10 10"
+            refX="0"
+            refY="0"
+            markerWidth="4"
+            markerHeight="4"
+            orient="auto"
+          >
+            <circle cx="0" cy="0" r="4" fill="#9ca3af" />
+          </marker>
+        </defs>
+      </svg>
       <FlowCanvas />
       <Sidebar />
     </ReactFlowProvider>

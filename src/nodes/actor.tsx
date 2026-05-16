@@ -10,6 +10,7 @@ import { useGame } from "../App";
 import { useEffect, useRef, useState } from "preact/hooks";
 import {
   applyTags,
+  collisionGroupForTags,
   parseTags,
   SLOT_GAP,
   SLOT_X,
@@ -148,6 +149,16 @@ export default function ActorNode({ id, data }: NodeProps) {
   const [tags, setTags] = useState<string[]>(
     (data.tags as string[] | undefined) ?? ["player"]
   );
+  // Instances: an optional array of { id, x, y } that converts this Actor
+  // into a *template* — one Excalibur Actor is created per instance with
+  // identical color/tags/collision and its own position. Modifiers attach
+  // to every instance via useParentActors. When the array is empty, the
+  // single-actor behavior at `pos` is used (back-compat).
+  type Instance = { id: string; x: number; y: number };
+  const [instances, setInstances] = useState<Instance[]>(
+    (data.instances as Instance[] | undefined) ?? [],
+  );
+  const instancesKey = JSON.stringify(instances);
 
   useEffect(() => {
     if (actor && actor === game.entities[id]) {
@@ -169,41 +180,82 @@ export default function ActorNode({ id, data }: NodeProps) {
   useEffect(() => {
     if (!game.engine || !edge || !edge.target.startsWith("scene-")) return;
 
-    const actor = new Player(
-      {
-        name: "player",
-        color: color,
-        x: pos.x,
-        y: pos.y,
-        width: 20,
-        height: 20,
-        collisionType: collision
-          ? CollisionType.Active
-          : CollisionType.PreventCollision,
-      },
-      (p) => {
-        setPos({ x: p.pos.x, y: p.pos.y });
+    const makeOne = (x: number, y: number, name: string) => {
+      const a = new Player(
+        {
+          name,
+          color,
+          x,
+          y,
+          width: 20,
+          height: 20,
+          collisionType: collision
+            ? CollisionType.Active
+            : CollisionType.PreventCollision,
+        },
+        () => {},
+      );
+      applyTags(a, tags);
+      a.addComponent(new InitialPosComponent(a.pos.clone()));
+      a.body.canSleep = false;
+      // Assign a collision group based on tags so the same gameplay tag
+      // ("player" / "enemy") also drives which actors physically push each
+      // other. Player and enemy bodies share masks that exclude each
+      // other, so a slime walking into the player doesn't bump them
+      // around — HitboxSystem still fires damage on overlap because it
+      // uses shape AABB tests, not physics events.
+      const group = collisionGroupForTags(tags);
+      if (group && a.body) {
+        a.body.group = group;
       }
-    );
+      return a;
+    };
 
-    applyTags(actor, tags);
-    actor.addComponent(new InitialPosComponent(actor.pos.clone()));
-    // v0.32 sleeps bodies by default; grid-step movement rewrites pos in
-    // a System, which doesn't wake the body. Keep the player awake so
-    // collisions and motion remain responsive.
-    actor.body.canSleep = false;
+    // If `instances` is non-empty this Actor acts as a template — we spawn
+    // one Excalibur Actor per instance and skip the single-pos primary.
+    // The first instance is also written to entities[id] so single-actor
+    // modifier code paths (useParentActor) get a reasonable default.
+    const inst = instances;
+    const createdEntries: Array<[string, Player]> = [];
+    if (inst.length > 0) {
+      const list = inst.map((i) =>
+        makeOne(i.x, i.y, `${data.label ?? "actor"}-${i.id}`),
+      );
+      list.forEach((a, idx) => {
+        createdEntries.push([`${id}__inst-${inst[idx].id}`, a]);
+      });
+      // Mirror the first instance at `[id]` for back-compat with hooks
+      // that look up a single actor by parent id.
+      createdEntries.push([id, list[0]]);
+    } else {
+      createdEntries.push([id, makeOne(pos.x, pos.y, "player")]);
+    }
+
     game.setEntities((entities) => {
-      return { ...entities, [id]: actor };
+      const next = { ...entities };
+      for (const [k, a] of createdEntries) next[k] = a;
+      return next;
     });
 
     return () => {
-      if (actor.scene) actor.kill();
+      for (const [, a] of createdEntries) {
+        if (a.scene) a.kill();
+      }
       game.setEntities((entities) => {
-        const { [id]: _, ...rest } = entities;
-        return rest;
+        const next = { ...entities };
+        for (const [k] of createdEntries) delete next[k];
+        return next;
       });
     };
-  }, [game.engine, edge?.target, color, collision, id, game.resetTick]);
+  }, [
+    game.engine,
+    edge?.target,
+    color,
+    collision,
+    id,
+    instancesKey,
+    game.resetTick,
+  ]);
 
   const onDuplicate = () => {
     const newId = `actor-${Date.now()}`;
@@ -250,6 +302,7 @@ export default function ActorNode({ id, data }: NodeProps) {
       <div ref={inputsRef}>
         <NodeHeader
           title={(data.label as string) ?? "Player"}
+          subtitle="actor"
           accent="actor"
           onTitleChange={(v) => reactFlow.updateNodeData(id, { label: v })}
           actions={
@@ -309,6 +362,134 @@ export default function ActorNode({ id, data }: NodeProps) {
               onChange={(e) => setTags(parseTags(e.currentTarget.value))}
             />
           </Field>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              borderTop: "1px solid var(--border)",
+              paddingTop: 6,
+              marginTop: 2,
+            }}
+          >
+            <span
+              style={{
+                fontSize: 10,
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+                color: "var(--text-subtle)",
+                fontWeight: 600,
+              }}
+            >
+              instances ({instances.length})
+            </span>
+            <Button
+              onClick={() => {
+                const next: Instance[] = [
+                  ...instances,
+                  {
+                    id: `i-${Date.now().toString(36)}-${Math.floor(
+                      Math.random() * 1000,
+                    )}`,
+                    x: pos.x,
+                    y: pos.y,
+                  },
+                ];
+                setInstances(next);
+                reactFlow.updateNodeData(id, { instances: next });
+              }}
+              title="Spawn another copy of this Actor at its own position"
+            >
+              + instance
+            </Button>
+          </div>
+          {instances.length > 0 && (
+            <div
+              style={{
+                fontSize: 10,
+                color: "var(--text-subtle)",
+                lineHeight: 1.3,
+                marginTop: -4,
+              }}
+            >
+              When this list isn't empty, the `x` / `y` fields above are
+              ignored — one Excalibur Actor is created per instance.
+            </div>
+          )}
+          {instances.map((inst, i) => (
+            <div
+              key={inst.id}
+              style={{
+                display: "flex",
+                gap: 4,
+                alignItems: "center",
+                background: "var(--bg-subtle)",
+                padding: 4,
+                borderRadius: 4,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 9,
+                  color: "var(--text-subtle)",
+                  width: 18,
+                  textAlign: "right",
+                }}
+              >
+                #{i + 1}
+              </span>
+              <label style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                  x
+                </span>
+                <input
+                  type="number"
+                  className="nrpg-input"
+                  style={{ width: 56 }}
+                  value={inst.x}
+                  onChange={(e) => {
+                    const v = +e.currentTarget.value;
+                    const next = instances.map((it, idx) =>
+                      idx === i ? { ...it, x: v } : it,
+                    );
+                    setInstances(next);
+                    reactFlow.updateNodeData(id, { instances: next });
+                  }}
+                />
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                  y
+                </span>
+                <input
+                  type="number"
+                  className="nrpg-input"
+                  style={{ width: 56 }}
+                  value={inst.y}
+                  onChange={(e) => {
+                    const v = +e.currentTarget.value;
+                    const next = instances.map((it, idx) =>
+                      idx === i ? { ...it, y: v } : it,
+                    );
+                    setInstances(next);
+                    reactFlow.updateNodeData(id, { instances: next });
+                  }}
+                />
+              </label>
+              <Button
+                variant="danger"
+                className="icon"
+                onClick={() => {
+                  const next = instances.filter((_, idx) => idx !== i);
+                  setInstances(next);
+                  reactFlow.updateNodeData(id, { instances: next });
+                }}
+                title="Remove this instance"
+              >
+                ✕
+              </Button>
+            </div>
+          ))}
         </NodeBody>
       </div>
     </NodeCard>
