@@ -126,7 +126,7 @@ export default function TiledMapNode({ id, data }: NodeProps) {
       setSelectedCell(null);
       return;
     }
-    const tmx = new TiledResource(trimmed, {
+    const tmx = new TiledResource(import.meta.env.BASE_URL + trimmed, {
       useTilemapCameraStrategy: false,
     });
     registerTiledMap(id, tmx);

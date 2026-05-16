@@ -40,7 +40,7 @@ export default function SoundNode({ id, data }: NodeProps) {
       soundRef.current = undefined;
       return;
     }
-    const snd = new Sound(trimmed);
+    const snd = new Sound(import.meta.env.BASE_URL + trimmed);
     snd.loop = loop;
     snd.volume = volume;
     registerSound(id, snd);
