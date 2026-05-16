@@ -36,7 +36,7 @@ export default function ImageNode({ id, data }: NodeProps) {
       setLoaded(false);
       return;
     }
-    const image = new ImageSource(trimmed);
+    const image = new ImageSource(import.meta.env.BASE_URL + trimmed);
     registerImage(id, image);
     let cancelled = false;
     image
