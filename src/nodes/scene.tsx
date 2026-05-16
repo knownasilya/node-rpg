@@ -367,13 +367,12 @@ export default function SceneNode({ id, data }: NodeProps) {
           `[scene:${id}] mounted Tiled map ${node.id} at (${px}, ${py}); layers=${tmx.layers?.length ?? "?"}`,
         );
         // Project the .tmj's object-layer entries into Actor `instances`.
-        // For each object with a Tiled `class` (e.g. "player", "slime"),
-        // look up the React Flow Actor tagged `tiled-template:<class>`
-        // and call updateNodeData to set `data.instances` to the full
-        // list of positions for that class. The actor's own effect then
-        // recreates the right number of Excalibur Actors at those world
-        // positions. Works for both single-spawn (player) and
-        // multi-spawn (enemies) templates from one mechanism.
+        // The Tiled object `class` (e.g. "player", "slime") is matched
+        // directly against actor tags — so an actor tagged "slime" with
+        // three .tmj objects of class="slime" gets three instances. The
+        // actor's own effect then recreates one Excalibur Actor per
+        // entry at the world position recorded in the .tmj. Works for
+        // both single-spawn (player) and multi-spawn (enemies).
         const tiledMap: any = (tmx as any).map;
         const rawLayers: any[] = tiledMap?.layers ?? [];
         const byClass: Record<
@@ -394,13 +393,16 @@ export default function SceneNode({ id, data }: NodeProps) {
             list.push({ id: `tmj-${cls}-${obj.id ?? list.length}`, x: wx, y: wy });
           }
         }
+        // Tiled object `class` (== `type` in older Tiled exports) is
+        // matched directly against actor tags. So a .tmj object with
+        // class="slime" looks up the Actor tagged "slime" and projects
+        // every matching object as an instance of that actor.
         for (const [cls, positions] of Object.entries(byClass)) {
-          const tag = `tiled-template:${cls}`;
           const actorNode = nodes.find(
             (n) =>
               n.type === "actor" &&
               Array.isArray((n.data as any)?.tags) &&
-              ((n.data as any).tags as string[]).includes(tag),
+              ((n.data as any).tags as string[]).includes(cls),
           );
           if (!actorNode) continue;
           reactFlow.updateNodeData(actorNode.id, { instances: positions });

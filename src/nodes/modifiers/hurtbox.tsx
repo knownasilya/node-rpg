@@ -6,14 +6,15 @@ import {
   HealthComponent,
   HurtboxComponent,
 } from "./ecs";
-import { parseTags, tagsToString, useParentActor } from "./shared";
+import { parseTags, tagsToString, useParentActors } from "./shared";
 
 function defaultBox(): BoxShape {
   return { x: -10, y: -10, w: 20, h: 20 };
 }
 
 export default function HurtboxModifier({ data, parentId }: NodeProps) {
-  const actor = useParentActor(parentId);
+  const actors = useParentActors(parentId);
+  const actorsKey = actors.map((a) => a.id).join(",");
   const [shapes, setShapes] = useState<BoxShape[]>(
     (data.shapes as BoxShape[] | undefined) ?? [defaultBox()],
   );
@@ -27,27 +28,29 @@ export default function HurtboxModifier({ data, parentId }: NodeProps) {
   const shapesKey = JSON.stringify(shapes);
 
   useEffect(() => {
-    if (!actor) return;
+    if (actors.length === 0) return;
     const tags = parseTags(tagsText);
-    const existing = actor.get(HurtboxComponent);
-    if (existing) {
-      existing.shapes = shapes;
-      existing.tags = tags;
-      existing.iFrameMs = iFrameMs;
-    } else {
-      actor.addComponent(new HurtboxComponent(shapes, tags, iFrameMs));
-    }
-    // Auto-attach a default HealthComponent if no Health modifier did first;
-    // HitboxSystem expects health to decrement on hit.
-    if (!actor.get(HealthComponent)) {
-      actor.addComponent(new HealthComponent(3, "kill"));
+    for (const actor of actors) {
+      const existing = actor.get(HurtboxComponent);
+      if (existing) {
+        existing.shapes = shapes;
+        existing.tags = tags;
+        existing.iFrameMs = iFrameMs;
+      } else {
+        actor.addComponent(new HurtboxComponent(shapes, tags, iFrameMs));
+      }
+      if (!actor.get(HealthComponent)) {
+        actor.addComponent(new HealthComponent(3, "kill"));
+      }
     }
     return () => {
-      if (actor.get(HurtboxComponent)) {
-        actor.removeComponent(HurtboxComponent);
+      for (const actor of actors) {
+        if (actor.get(HurtboxComponent)) {
+          actor.removeComponent(HurtboxComponent);
+        }
       }
     };
-  }, [actor, shapesKey, tagsText, iFrameMs]);
+  }, [actorsKey, shapesKey, tagsText, iFrameMs]);
 
   const updateShape = (i: number, patch: Partial<BoxShape>) =>
     setShapes((arr) => arr.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));

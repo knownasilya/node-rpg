@@ -41,7 +41,7 @@ export const tiledPlatformerNodes: Node[] = [
       pos: { x: 120, y: 320 },
       color: "red",
       collision: true,
-      tags: ["player", "tiled-template:player"],
+      tags: ["player"],
     },
   },
   {
@@ -427,10 +427,11 @@ export const tiledPlatformerNodes: Node[] = [
       pos: { x: 232, y: 312 },
       color: "green",
       collision: true,
-      // `tiled-template:slime` lets scene.tsx project every .tmj object
-      // with class="slime" into this actor's `instances`. The default
-      // instances below are a fallback for when no Tiled map is wired.
-      tags: ["enemy", "tiled-template:slime"],
+      // scene.tsx matches Tiled object `class` directly against tags, so
+      // every .tmj object with class="slime" populates this actor's
+      // `instances`. The defaults below are a fallback when no Tiled map
+      // is wired.
+      tags: ["enemy", "slime"],
       instances: [
         { id: "s1", x: 232, y: 312 },
         { id: "s2", x: 152, y: 280 },

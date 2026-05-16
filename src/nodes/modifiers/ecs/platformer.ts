@@ -529,25 +529,34 @@ export class HitboxSystem extends System {
           (c: any) => c?.constructor?.name === "AnimationComponent",
         );
         let died = false;
-        if (health) {
+        const alreadyDead = !!health && health.current <= 0;
+        if (health && !alreadyDead) {
           health.current = Math.max(0, health.current - hb.damage);
           if (health.current === 0) {
             died = true;
             if (anim?.pin) anim.pin("death", Number.POSITIVE_INFINITY);
+            // Stop residual motion so the death animation plays in place.
+            try {
+              const motion = (va as any).get?.(MotionComponent);
+              if (motion) motion.vel = vec(0, 0);
+            } catch {}
             if (health.onZero === "kill" && va instanceof Actor) {
-              // Delay the kill so the death pin actually has a tick to
-              // render before the actor is removed from the scene.
+              // Hold the dying actor on screen long enough for the death
+              // animation to read — most spritesheets have 4-6 death
+              // frames at ~120 ms each. 800 ms gives a clear visual.
               setTimeout(() => {
                 try {
                   if (!va.isKilled?.()) va.kill();
                 } catch {}
-              }, 250);
+              }, 800);
             } else if (health.onZero === "emit" && health.emitEvent) {
               emit(health.emitEvent, { actor: va });
             }
           }
         }
-        if (!died && anim?.pin) anim.pin("hurt", vb.iFrameMs);
+        if (!died && !alreadyDead && anim?.pin) {
+          anim.pin("hurt", vb.iFrameMs);
+        }
         vb.invincibleUntil = now + vb.iFrameMs;
         emit("damage-dealt", { attacker: ha, victim: va, amount: hb.damage });
       }

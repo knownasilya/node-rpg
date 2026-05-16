@@ -5,7 +5,6 @@ import {
   useHandleConnections,
   useNodes,
   useReactFlow,
-  useViewport,
 } from "@xyflow/react";
 import { Engine, PointerScope, Scene, WebAudio } from "excalibur";
 import { createPortal } from "preact/compat";
@@ -19,7 +18,6 @@ export default function Game({ id, data }: NodeProps) {
   const placeholderRef = useRef<HTMLDivElement>(null);
   const game = useGame();
   const nodes = useNodes();
-  const viewport = useViewport();
   const reactFlow = useReactFlow();
   const sourceConnections = useHandleConnections({
     type: "target",
@@ -142,10 +140,6 @@ export default function Game({ id, data }: NodeProps) {
     } catch {}
   }, [width, height, game.engine]);
 
-  // Track this node's React Flow position so we can re-sync on drag.
-  const myNode = nodes.find((n) => n.id === id);
-  const myX = myNode?.position.x ?? 0;
-  const myY = myNode?.position.y ?? 0;
 
   // Track the placeholder's screen rect so we can overlay the portal-hosted
   // canvas on top of it. Re-sync on React Flow viewport, on window scroll,
@@ -218,6 +212,49 @@ export default function Game({ id, data }: NodeProps) {
     }
     return () => unsubs.forEach((fn) => fn());
   }, [counterKey, game.resetTick]);
+
+  // Polled view of the player's current/max HP — read off the live
+  // Excalibur HealthComponent each animation frame so the overlay reacts
+  // to in-game damage without needing an event bus subscription. Found
+  // by tag: any Actor entity in the engine carrying the "player" tag.
+  const [playerHp, setPlayerHp] = useState<{
+    current: number;
+    max: number;
+  } | null>(null);
+  useEffect(() => {
+    let active = true;
+    const tick = () => {
+      if (!active) return;
+      let next: { current: number; max: number } | null = null;
+      for (const v of Object.values(game.entities)) {
+        const a: any = v;
+        if (!a || typeof a.hasTag !== "function") continue;
+        if (!a.hasTag("player")) continue;
+        const comps =
+          typeof a.getComponents === "function" ? a.getComponents() : [];
+        const hc = comps.find(
+          (c: any) => c?.constructor?.name === "HealthComponent",
+        );
+        if (hc) {
+          next = { current: hc.current, max: hc.max };
+          break;
+        }
+      }
+      setPlayerHp((prev) => {
+        if (!prev && !next) return prev;
+        if (!prev || !next) return next;
+        if (prev.current === next.current && prev.max === next.max)
+          return prev;
+        return next;
+      });
+      requestAnimationFrame(tick);
+    };
+    const id = requestAnimationFrame(tick);
+    return () => {
+      active = false;
+      cancelAnimationFrame(id);
+    };
+  }, [game.entities, game.resetTick]);
 
   const aspect = width / height;
   const portalStyle: Record<string, any> = playMode
@@ -327,19 +364,69 @@ export default function Game({ id, data }: NodeProps) {
             }}
           >
             <canvas id={id} ref={ref} style={canvasStyle} />
-            {counterNodes.map((n) => {
-              const anchor =
-                (n.data?.anchor as
+            {(() => {
+              // Render counter overlays AND a player-health overlay,
+              // stacking everything that shares an anchor corner so the
+              // HP indicator sits next to the coins (top-left both).
+              type Pill = {
+                key: string;
+                anchor:
                   | "top-left"
                   | "top-right"
                   | "bottom-left"
-                  | "bottom-right"
-                  | undefined) ?? "top-left";
-              const label = (n.data?.label as string | undefined) ?? "Counter";
-              const color = (n.data?.color as string | undefined) ?? "#ffd700";
-              const count = counterCounts[n.id] ?? 0;
-              const anchorStyle: Record<string, any> = {
-                position: "absolute",
+                  | "bottom-right";
+                text: string;
+                color: string;
+              };
+              const pills: Pill[] = counterNodes.map((n) => ({
+                key: n.id,
+                anchor:
+                  ((n.data?.anchor as Pill["anchor"] | undefined) ??
+                    "top-left"),
+                text: `${(n.data?.label as string | undefined) ?? "Counter"}: ${counterCounts[n.id] ?? 0}`,
+                color:
+                  (n.data?.color as string | undefined) ?? "#ffd700",
+              }));
+              if (playerHp) {
+                pills.push({
+                  key: "__player-hp",
+                  anchor: "top-left",
+                  text: `HP: ${playerHp.current} / ${playerHp.max}`,
+                  color: "#ef4444",
+                });
+              }
+              // Stack same-anchor pills horizontally inside a container.
+              const groups: Record<Pill["anchor"], Pill[]> = {
+                "top-left": [],
+                "top-right": [],
+                "bottom-left": [],
+                "bottom-right": [],
+              };
+              for (const p of pills) groups[p.anchor].push(p);
+              const containerFor = (anchor: Pill["anchor"]) => {
+                const s: Record<string, any> = {
+                  position: "absolute",
+                  display: "flex",
+                  flexDirection: "row",
+                  gap: 6,
+                  pointerEvents: "none",
+                };
+                if (anchor === "top-left") {
+                  s.top = 8;
+                  s.left = 8;
+                } else if (anchor === "top-right") {
+                  s.top = 8;
+                  s.right = 8;
+                } else if (anchor === "bottom-left") {
+                  s.bottom = 8;
+                  s.left = 8;
+                } else {
+                  s.bottom = 8;
+                  s.right = 8;
+                }
+                return s;
+              };
+              const pillStyle = (color: string): Record<string, any> => ({
                 padding: "4px 8px",
                 background: "rgba(0, 0, 0, 0.55)",
                 color,
@@ -347,28 +434,20 @@ export default function Game({ id, data }: NodeProps) {
                 fontSize: 14,
                 fontWeight: 700,
                 borderRadius: 4,
-                pointerEvents: "none",
                 textShadow: "0 1px 2px rgba(0,0,0,0.6)",
-              };
-              if (anchor === "top-left") {
-                anchorStyle.top = 8;
-                anchorStyle.left = 8;
-              } else if (anchor === "top-right") {
-                anchorStyle.top = 8;
-                anchorStyle.right = 8;
-              } else if (anchor === "bottom-left") {
-                anchorStyle.bottom = 8;
-                anchorStyle.left = 8;
-              } else {
-                anchorStyle.bottom = 8;
-                anchorStyle.right = 8;
-              }
-              return (
-                <div key={n.id} style={anchorStyle}>
-                  {label}: {count}
-                </div>
-              );
-            })}
+              });
+              return (Object.keys(groups) as Pill["anchor"][])
+                .filter((anchor) => groups[anchor].length > 0)
+                .map((anchor) => (
+                  <div key={`group-${anchor}`} style={containerFor(anchor)}>
+                    {groups[anchor].map((p) => (
+                      <div key={p.key} style={pillStyle(p.color)}>
+                        {p.text}
+                      </div>
+                    ))}
+                  </div>
+                ));
+            })()}
           </div>
           {playMode && (
             <div className="nrpg-game-toolbar">

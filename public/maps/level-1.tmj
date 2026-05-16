@@ -28,8 +28,8 @@
                  "type":"slime",
                  "visible":true,
                  "width":16,
-                 "x":72,
-                 "y":111
+                 "x":80,
+                 "y":112
                 }, 
                 {
                  "height":16,
@@ -40,7 +40,7 @@
                  "type":"slime",
                  "visible":true,
                  "width":16,
-                 "x":216,
+                 "x":208,
                  "y":48
                 }, 
                 {
@@ -52,8 +52,8 @@
                  "type":"slime",
                  "visible":true,
                  "width":16,
-                 "x":376,
-                 "y":47.741174301779
+                 "x":368,
+                 "y":48
                 }],
          "opacity":1,
          "type":"objectgroup",

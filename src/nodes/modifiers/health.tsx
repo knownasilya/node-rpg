@@ -2,12 +2,13 @@ import { NodeProps } from "@xyflow/react";
 import { useEffect, useState } from "preact/hooks";
 import { Field } from "../../ui";
 import { HealthComponent, type OnZero } from "./ecs";
-import { useParentActor } from "./shared";
+import { useParentActors } from "./shared";
 
 const ON_ZERO_OPTIONS: OnZero[] = ["kill", "respawn", "emit"];
 
 export default function HealthModifier({ data, parentId }: NodeProps) {
-  const actor = useParentActor(parentId);
+  const actors = useParentActors(parentId);
+  const actorsKey = actors.map((a) => a.id).join(",");
   const [max, setMax] = useState<number>(
     (data.max as number | undefined) ?? 3,
   );
@@ -19,29 +20,23 @@ export default function HealthModifier({ data, parentId }: NodeProps) {
   );
 
   useEffect(() => {
-    if (!actor) return;
-    const existing = actor.get(HealthComponent);
-    if (existing) {
-      existing.max = max;
-      existing.onZero = onZero;
-      existing.emitEvent = emitEvent.trim() || undefined;
-      // Don't yank current downward — only raise the floor if max went up.
-      if (existing.current > max) existing.current = max;
-    } else {
-      actor.addComponent(
-        new HealthComponent(max, onZero, emitEvent.trim() || undefined),
-      );
-    }
-    return () => {
-      // Health is shared infrastructure between Hurtbox & this modifier; only
-      // remove if the user explicitly unmounts the Health modifier and no
-      // Hurtbox sibling is keeping it alive. We do a soft check here.
-      const stillNeeded = !!actor.get(HealthComponent);
-      if (stillNeeded && !actor.get(HealthComponent)?.current) {
-        actor.removeComponent(HealthComponent);
+    if (actors.length === 0) return;
+    for (const actor of actors) {
+      const existing = actor.get(HealthComponent);
+      if (existing) {
+        existing.max = max;
+        existing.onZero = onZero;
+        existing.emitEvent = emitEvent.trim() || undefined;
+        if (existing.current > max) existing.current = max;
+      } else {
+        actor.addComponent(
+          new HealthComponent(max, onZero, emitEvent.trim() || undefined),
+        );
       }
-    };
-  }, [actor, max, onZero, emitEvent]);
+    }
+    // No removal on unmount — the HurtboxSystem and Hurtbox modifier may
+    // still rely on the component. Health acts as a passive store.
+  }, [actorsKey, max, onZero, emitEvent]);
 
   return (
     <div

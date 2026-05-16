@@ -158,6 +158,19 @@ export default function ActorNode({ id, data }: NodeProps) {
   const [instances, setInstances] = useState<Instance[]>(
     (data.instances as Instance[] | undefined) ?? [],
   );
+  // Sync local state when `data.instances` changes externally — e.g. when
+  // scene.tsx projects .tmj object positions into the Actor's data via
+  // reactFlow.updateNodeData. Without this, useState would ignore the
+  // updated prop and the slime would keep its hardcoded fallback set.
+  const dataInstancesKey = JSON.stringify(
+    (data.instances as Instance[] | undefined) ?? [],
+  );
+  useEffect(() => {
+    const next = (data.instances as Instance[] | undefined) ?? [];
+    setInstances((prev) =>
+      JSON.stringify(prev) === JSON.stringify(next) ? prev : next,
+    );
+  }, [dataInstancesKey]);
   const instancesKey = JSON.stringify(instances);
 
   useEffect(() => {
