@@ -1,4 +1,4 @@
-import { NodeProps, useReactFlow } from "@xyflow/react";
+import { NodeProps, useNodes, useReactFlow } from "@xyflow/react";
 import { Actor, vec } from "excalibur";
 import { useEffect, useState } from "preact/hooks";
 import { Field } from "../../ui";
@@ -16,6 +16,12 @@ export const ACTIONS: CollisionAction[] = [
   "growTail",
   "relocate",
   "callSpawner",
+  "playSound",
+  "playAnimation",
+  "emitEvent",
+  "damage",
+  "bounce",
+  "switchScene",
 ];
 
 const ACTION_DESCRIPTIONS: Record<CollisionAction, string> = {
@@ -28,6 +34,16 @@ const ACTION_DESCRIPTIONS: Record<CollisionAction, string> = {
   relocate:
     "move the entity hit to a random grid cell within its scene (skipping the outer wall row)",
   callSpawner: "fire the Spawner node with this tag (creates a new entity)",
+  playSound: "play the registered Sound by its node id",
+  playAnimation:
+    "swap this actor's graphic to the registered Animation by its node id",
+  emitEvent:
+    "fire a named event on the global event bus; OnEvent modifiers can subscribe",
+  damage:
+    "subtract from the HealthComponent on the entity that was hit (if any)",
+  bounce: "set this actor's upward velocity (stomp, bouncy pad, etc.)",
+  switchScene:
+    "transfer this actor to another connected scene and switch the engine to it (door / portal)",
 };
 
 function relocate(
@@ -77,6 +93,32 @@ export default function CollisionRuleModifier({
   const [spawnerTag, setSpawnerTag] = useState<string>(
     (data.spawnerTag as string | undefined) ?? "",
   );
+  const [playSoundKey, setPlaySoundKey] = useState<string>(
+    (data.playSoundKey as string | undefined) ?? "",
+  );
+  const [playAnimationKey, setPlayAnimationKey] = useState<string>(
+    (data.playAnimationKey as string | undefined) ?? "",
+  );
+  const [emitEventName, setEmitEventName] = useState<string>(
+    (data.emitEventName as string | undefined) ?? "",
+  );
+  const [damageAmount, setDamageAmount] = useState<number>(
+    (data.damageAmount as number | undefined) ?? 1,
+  );
+  const [bounceVelocity, setBounceVelocity] = useState<number>(
+    (data.bounceVelocity as number | undefined) ?? 300,
+  );
+  const [targetSceneId, setTargetSceneId] = useState<string>(
+    (data.targetSceneId as string | undefined) ?? "",
+  );
+  const [sceneSpawnX, setSceneSpawnX] = useState<number | undefined>(
+    data.sceneSpawnX as number | undefined,
+  );
+  const [sceneSpawnY, setSceneSpawnY] = useState<number | undefined>(
+    data.sceneSpawnY as number | undefined,
+  );
+  const allNodes = useNodes();
+  const sceneNodes = allNodes.filter((n) => n.type === "scene");
 
   useEffect(() => {
     if (!actor) return;
@@ -97,6 +139,14 @@ export default function CollisionRuleModifier({
       action,
       growTailFor,
       spawnerTag,
+      playSoundKey,
+      playAnimationKey,
+      emitEventName,
+      damageAmount,
+      bounceVelocity,
+      targetSceneId,
+      sceneSpawnX,
+      sceneSpawnY,
       onRelocate: (other) => relocate(reactFlow, parentId ?? "", other),
     });
 
@@ -110,10 +160,32 @@ export default function CollisionRuleModifier({
         actor.removeComponent(CollisionRulesComponent);
       }
     };
-  }, [actor, target, action, growTailFor, spawnerTag, parentId, ruleNodeId]);
+  }, [
+    actor,
+    target,
+    action,
+    growTailFor,
+    spawnerTag,
+    playSoundKey,
+    playAnimationKey,
+    emitEventName,
+    damageAmount,
+    bounceVelocity,
+    targetSceneId,
+    sceneSpawnX,
+    sceneSpawnY,
+    parentId,
+    ruleNodeId,
+  ]);
 
   const isGrow = action === "growTail";
   const isCallSpawner = action === "callSpawner";
+  const isPlaySound = action === "playSound";
+  const isPlayAnimation = action === "playAnimation";
+  const isEmitEvent = action === "emitEvent";
+  const isDamage = action === "damage";
+  const isBounce = action === "bounce";
+  const isSwitchScene = action === "switchScene";
 
   return (
     <div
@@ -177,6 +249,105 @@ export default function CollisionRuleModifier({
               onChange={(e) => setSpawnerTag(e.currentTarget.value)}
             />
           </Field>
+        )}
+        {isPlaySound && (
+          <Field label="sound id">
+            <input
+              type="text"
+              className="nrpg-input"
+              style={{ width: 120, textAlign: "left" }}
+              value={playSoundKey}
+              placeholder="sound-… node id"
+              onChange={(e) => setPlaySoundKey(e.currentTarget.value)}
+            />
+          </Field>
+        )}
+        {isPlayAnimation && (
+          <Field label="anim id">
+            <input
+              type="text"
+              className="nrpg-input"
+              style={{ width: 120, textAlign: "left" }}
+              value={playAnimationKey}
+              placeholder="animation-… node id"
+              onChange={(e) => setPlayAnimationKey(e.currentTarget.value)}
+            />
+          </Field>
+        )}
+        {isEmitEvent && (
+          <Field label="event">
+            <input
+              type="text"
+              className="nrpg-input"
+              style={{ width: 120, textAlign: "left" }}
+              value={emitEventName}
+              placeholder="e.g. player-hurt"
+              onChange={(e) => setEmitEventName(e.currentTarget.value)}
+            />
+          </Field>
+        )}
+        {isDamage && (
+          <Field label="amount">
+            <input
+              type="number"
+              className="nrpg-input"
+              value={damageAmount}
+              onChange={(e) => setDamageAmount(+e.currentTarget.value)}
+            />
+          </Field>
+        )}
+        {isBounce && (
+          <Field label="velocity">
+            <input
+              type="number"
+              className="nrpg-input"
+              value={bounceVelocity}
+              onChange={(e) => setBounceVelocity(+e.currentTarget.value)}
+            />
+          </Field>
+        )}
+        {isSwitchScene && (
+          <>
+            <Field label="target scene">
+              <select
+                className="nrpg-select"
+                value={targetSceneId}
+                onChange={(e) => setTargetSceneId(e.currentTarget.value)}
+              >
+                <option value="">(pick one)</option>
+                {sceneNodes.map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {((n.data?.label as string | undefined) ?? n.id) +
+                      ` — ${n.id}`}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="spawn x">
+              <input
+                type="number"
+                className="nrpg-input"
+                value={sceneSpawnX ?? ""}
+                placeholder="(leave blank)"
+                onChange={(e) => {
+                  const v = e.currentTarget.value;
+                  setSceneSpawnX(v === "" ? undefined : +v);
+                }}
+              />
+            </Field>
+            <Field label="spawn y">
+              <input
+                type="number"
+                className="nrpg-input"
+                value={sceneSpawnY ?? ""}
+                placeholder="(leave blank)"
+                onChange={(e) => {
+                  const v = e.currentTarget.value;
+                  setSceneSpawnY(v === "" ? undefined : +v);
+                }}
+              />
+            </Field>
+          </>
         )}
         <div
           style={{

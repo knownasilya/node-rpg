@@ -1,4 +1,12 @@
-import { Actor, Vector, vec } from "excalibur";
+import {
+  Actor,
+  Animation,
+  ImageSource,
+  Sound,
+  SpriteSheet,
+  Vector,
+  vec,
+} from "excalibur";
 import { useGame } from "../../App";
 
 export function parseTags(input: string): string[] {
@@ -133,3 +141,126 @@ export const SLOT_X = 4;
 export const SLOT_GAP = 20;
 export const ACTOR_WIDTH = 240;
 export const SLOT_WIDTH = ACTOR_WIDTH - SLOT_X * 2;
+
+// --- Event bus ----------------------------------------------------------
+// Tiny typed pub/sub used by platformer systems (e.g. JumpSystem emits
+// "player-jumped") and by OnEventModifier subscribers. Listeners are
+// always cleaned up by the subscriber's React effect; clearAllEventListeners
+// is a defensive sweep called from App.reset for unmount-order edge cases.
+
+type EventPayload = Record<string, unknown>;
+type EventListener = (payload: EventPayload) => void;
+const eventListeners = new Map<string, Set<EventListener>>();
+
+export function emit(event: string, payload: EventPayload = {}): void {
+  const set = eventListeners.get(event);
+  if (!set) return;
+  // Snapshot — a listener may unsubscribe itself or another listener.
+  for (const cb of Array.from(set)) {
+    try {
+      cb(payload);
+    } catch (err) {
+      console.error(`[eventBus] listener for "${event}" threw`, err);
+    }
+  }
+}
+
+export function on(event: string, cb: EventListener): () => void {
+  let set = eventListeners.get(event);
+  if (!set) {
+    set = new Set();
+    eventListeners.set(event, set);
+  }
+  set.add(cb);
+  return () => {
+    set!.delete(cb);
+    if (set!.size === 0) eventListeners.delete(event);
+  };
+}
+
+export function clearAllEventListeners(): void {
+  eventListeners.clear();
+}
+
+// --- Asset registries ---------------------------------------------------
+// Keyed by the React Flow node id of the asset node. Asset nodes register
+// on mount and unregister on unmount. Consumers (modifiers, collision rule
+// actions) read by id. Cleared from App.reset to recover from unmount-order
+// edge cases; modifier unmount cleanups are the primary path.
+
+const imageSources = new Map<string, ImageSource>();
+const spriteSheets = new Map<string, SpriteSheet>();
+const animations = new Map<string, Animation>();
+const sounds = new Map<string, Sound>();
+// TiledResource lives in a peer plugin package; typed as unknown so this
+// module compiles whether or not the plugin is installed yet.
+const tiledMaps = new Map<string, unknown>();
+
+export function registerImage(id: string, image: ImageSource): void {
+  imageSources.set(id, image);
+}
+export function unregisterImage(id: string): void {
+  imageSources.delete(id);
+}
+export function getImage(id: string): ImageSource | undefined {
+  return imageSources.get(id);
+}
+
+export function registerSpritesheet(id: string, sheet: SpriteSheet): void {
+  spriteSheets.set(id, sheet);
+}
+export function unregisterSpritesheet(id: string): void {
+  spriteSheets.delete(id);
+}
+export function getSpritesheet(id: string): SpriteSheet | undefined {
+  return spriteSheets.get(id);
+}
+
+export function registerAnimation(id: string, anim: Animation): void {
+  animations.set(id, anim);
+}
+export function unregisterAnimation(id: string): void {
+  animations.delete(id);
+}
+export function getAnimation(id: string): Animation | undefined {
+  return animations.get(id);
+}
+
+export function registerSound(id: string, sound: Sound): void {
+  sounds.set(id, sound);
+}
+export function unregisterSound(id: string): void {
+  sounds.delete(id);
+}
+export function getSound(id: string): Sound | undefined {
+  return sounds.get(id);
+}
+
+export function registerTiledMap(id: string, map: unknown): void {
+  tiledMaps.set(id, map);
+}
+export function unregisterTiledMap(id: string): void {
+  tiledMaps.delete(id);
+}
+export function getTiledMap(id: string): unknown {
+  return tiledMaps.get(id);
+}
+
+export function getAllLoadableAssets(): unknown[] {
+  // Excalibur's Loader accepts any Loadable; the registries hold a mix of
+  // ImageSource / Sound / TiledResource. Sprite sheets and Animations are
+  // derived from ImageSources so don't need separate preloading.
+  return [
+    ...imageSources.values(),
+    ...sounds.values(),
+    ...tiledMaps.values(),
+  ];
+}
+
+export function clearAllAssets(): void {
+  imageSources.clear();
+  spriteSheets.clear();
+  animations.clear();
+  sounds.clear();
+  tiledMaps.clear();
+}

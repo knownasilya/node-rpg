@@ -92,6 +92,12 @@ export default function GraphicGroupNode({ id, data }: NodeProps) {
   const [collision, setCollision] = useState<boolean>(
     (data.collision as boolean) ?? true
   );
+  // "passive": triggers events only (default, snake walls). "fixed":
+  // immovable, pushes Active actors out (platformer ground). "active":
+  // pushable. Stored as plain string so React Flow can serialize the graph.
+  const [physicsType, setPhysicsType] = useState<"passive" | "fixed" | "active">(
+    (data.physicsType as "passive" | "fixed" | "active" | undefined) ?? "passive",
+  );
   const [invisible, setInvisible] = useState<boolean>(
     (data.invisible as boolean) ?? false
   );
@@ -106,6 +112,7 @@ export default function GraphicGroupNode({ id, data }: NodeProps) {
 
   // Recreate Excalibur actor on connection / shape / collision changes.
   const shapesKey = JSON.stringify(shapes);
+  // physicsType included so a switch (e.g. passive → fixed) rebuilds the actor.
   useEffect(() => {
     if (!game.engine || !edge || !edge.target.startsWith("scene-")) return;
 
@@ -146,13 +153,18 @@ export default function GraphicGroupNode({ id, data }: NodeProps) {
         ? new GraphicsGroup({ members, useAnchor: false })
         : null;
 
+    const resolvedType = collision
+      ? physicsType === "fixed"
+        ? CollisionType.Fixed
+        : physicsType === "active"
+          ? CollisionType.Active
+          : CollisionType.Passive
+      : CollisionType.PreventCollision;
     const a = new Actor({
       name: "graphicGroup",
       pos: vec(groupX, groupY),
       collider,
-      collisionType: collision
-        ? CollisionType.Passive
-        : CollisionType.PreventCollision,
+      collisionType: resolvedType,
     });
     if (groupGraphic) {
       a.graphics.add(groupGraphic);
@@ -169,7 +181,7 @@ export default function GraphicGroupNode({ id, data }: NodeProps) {
         return rest;
       });
     };
-  }, [game.engine, edge?.target, collision, shapesKey, id, game.resetTick]);
+  }, [game.engine, edge?.target, collision, physicsType, shapesKey, id, game.resetTick]);
 
   useEffect(() => {
     if (actor) actor.pos = vec(groupX, groupY);
@@ -244,6 +256,22 @@ export default function GraphicGroupNode({ id, data }: NodeProps) {
             placeholder="e.g. wall, danger"
             onChange={(e) => setTags(parseTags(e.currentTarget.value))}
           />
+        </Field>
+        <Field label="physics">
+          <select
+            className="nrpg-select"
+            value={physicsType}
+            disabled={!collision}
+            onChange={(e) =>
+              setPhysicsType(
+                e.currentTarget.value as "passive" | "fixed" | "active",
+              )
+            }
+          >
+            <option value="passive">passive</option>
+            <option value="fixed">fixed</option>
+            <option value="active">active</option>
+          </select>
         </Field>
 
         <div style={{ display: "flex", gap: 6 }}>

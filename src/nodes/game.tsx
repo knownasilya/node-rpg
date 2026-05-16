@@ -43,14 +43,30 @@ export default function Game({ id, data }: NodeProps) {
 
   useEffect(() => {
     if (scenes.length && game.engine) {
-      scenes
-        .filter((s) => !!s)
-        .forEach((item) => {
-          const scene = game.entities[item?.id as string] as Scene;
-          if (game?.engine?.scenes[item.id]) return;
+      // Add each newly-connected scene to the engine. Only auto-navigate to
+      // the first scene (when the engine is still on the "root" placeholder
+      // or the active scene is unknown). Subsequent scene additions stay
+      // dormant until something explicitly switches to them (collision-rule
+      // switchScene action, etc.) — otherwise edge order would silently
+      // decide which scene boots, which is surprising.
+      const liveScenes = scenes.filter((s): s is NonNullable<typeof s> => !!s);
+      // "Are we still on the placeholder root scene?" Decided once before the
+      // loop so adding the first scene doesn't change the answer for the rest.
+      const rootScene = (game.engine as any)?.scenes?.["root"];
+      const currentScene = (game.engine as any)?.currentScene;
+      const onRootInitially = !currentScene || currentScene === rootScene;
+      let didNavigate = false;
+      for (const item of liveScenes) {
+        const scene = game.entities[item.id] as Scene;
+        if (!scene) continue;
+        if (!game.engine?.scenes[item.id]) {
           game.engine?.addScene(item.id as string, scene);
+        }
+        if (onRootInitially && !didNavigate) {
           game.engine?.goToScene(item.id);
-        });
+          didNavigate = true;
+        }
+      }
     } else {
       game.engine?.goToScene("root").then(() => {
         if (!game.engine?.scenes) return;
@@ -61,6 +77,17 @@ export default function Game({ id, data }: NodeProps) {
       });
     }
   }, [game.engine, scenes, game.entities]);
+
+  // On reset, return to the first connected scene (the canonical "start"
+  // scene). Actors are already torn down + recreated by the existing
+  // resetTick-keyed effects in actor.tsx / graphicGroup.tsx, so all we own
+  // here is the engine's active-scene handoff.
+  const firstSceneId = scenes.find((s) => !!s)?.id;
+  useEffect(() => {
+    if (!game.engine || !firstSceneId) return;
+    if (game.resetTick === 0) return; // skip initial mount
+    game.engine.goToScene(firstSceneId);
+  }, [game.engine, game.resetTick, firstSceneId]);
 
   useEffect(() => {
     if (ref.current) {
@@ -95,7 +122,11 @@ export default function Game({ id, data }: NodeProps) {
 
   // Track the placeholder's screen rect so we can overlay the portal-hosted
   // canvas on top of it. Re-sync on React Flow viewport, on window scroll,
-  // on size changes, and on this node's own position changes.
+  // on size changes, and on this node's own position changes. Wrapped in
+  // rAF because React Flow applies the viewport transform via direct DOM
+  // mutation in a rAF callback, so a synchronous sync after the state
+  // update would still read the pre-zoom bounding rect. A ResizeObserver
+  // catches non-transform resizes (panels, window) as a safety net.
   useEffect(() => {
     const sync = () => {
       const el = placeholderRef.current;
@@ -103,12 +134,23 @@ export default function Game({ id, data }: NodeProps) {
       const r = el.getBoundingClientRect();
       setPreviewRect({ left: r.left, top: r.top, w: r.width, h: r.height });
     };
-    sync();
-    window.addEventListener("scroll", sync, true);
-    window.addEventListener("resize", sync);
+    let rafId = requestAnimationFrame(sync);
+    const onChange = () => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(sync);
+    };
+    window.addEventListener("scroll", onChange, true);
+    window.addEventListener("resize", onChange);
+    const ro =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(onChange)
+        : undefined;
+    if (ro && placeholderRef.current) ro.observe(placeholderRef.current);
     return () => {
-      window.removeEventListener("scroll", sync, true);
-      window.removeEventListener("resize", sync);
+      cancelAnimationFrame(rafId);
+      window.removeEventListener("scroll", onChange, true);
+      window.removeEventListener("resize", onChange);
+      ro?.disconnect();
     };
   }, [
     viewport.x,

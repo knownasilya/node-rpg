@@ -234,6 +234,10 @@ export default function SceneNode({ id, data }: NodeProps) {
         // on a killed entity, which was reviving dead actors on every render.
         if (actor.scene === sceneRef.current) return;
         if (actor.isKilled?.()) return;
+        // If another scene already owns this actor (e.g. switchScene migrated
+        // the player out of us), don't yank them back. The cross-scene mover
+        // is responsible for placing them.
+        if (actor.scene && actor.scene !== sceneRef.current) return;
         sceneRef.current?.add(actor);
       });
     }

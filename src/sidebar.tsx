@@ -1,4 +1,6 @@
 import { useReactFlow } from "@xyflow/react";
+import { useGame } from "./App";
+import { TEMPLATE_ORDER, TEMPLATES, type TemplateName } from "./templates";
 import { Accent } from "./ui";
 
 const LAYOUT_COLUMNS: string[] = [
@@ -31,6 +33,15 @@ export const MODIFIER_KINDS: ItemDef[] = [
   { kind: "movementModifier", label: "Movement", accent: "movement" },
   { kind: "collisionRuleModifier", label: "Collide", accent: "collision" },
   { kind: "followerModifier", label: "Follow", accent: "follower" },
+  {
+    kind: "platformerMovementModifier",
+    label: "Platformer",
+    accent: "movement",
+  },
+  { kind: "gravityModifier", label: "Gravity", accent: "movement" },
+  { kind: "groundModifier", label: "Ground", accent: "collision" },
+  { kind: "jumpModifier", label: "Jump", accent: "movement" },
+  { kind: "cameraFollowModifier", label: "Camera", accent: "scene" },
 ];
 
 export const DRAG_MIME = "application/reactflow-kind";
@@ -54,6 +65,7 @@ function DraggableItem({ kind, label, accent }: ItemDef) {
 
 export default function Sidebar() {
   const { setNodes, getInternalNode } = useReactFlow();
+  const game = useGame();
 
   const cleanupLayout = () => {
     setNodes((nds) => {
@@ -91,6 +103,25 @@ export default function Sidebar() {
 
   return (
     <div className="nrpg-sidebar">
+      <div className="nrpg-sidebar-section">
+        <div className="nrpg-sidebar-section-title">Template</div>
+        <div style={{ display: "flex", gap: 4 }}>
+          {TEMPLATE_ORDER.map((name: TemplateName) => {
+            const active = game.template === name;
+            return (
+              <button
+                key={name}
+                className={"nrpg-btn" + (active ? " active" : "")}
+                style={{ flex: 1 }}
+                onClick={() => game.loadTemplate(name)}
+                title={`Load the ${TEMPLATES[name].label} starter graph`}
+              >
+                {TEMPLATES[name].label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
       <div className="nrpg-sidebar-section">
         <div className="nrpg-sidebar-section-title">Nodes</div>
         {NODE_KINDS.map((m) => (

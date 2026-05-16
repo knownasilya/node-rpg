@@ -19,256 +19,23 @@ import {
   StateUpdater,
   Dispatch,
 } from "preact/hooks";
-import { clearAllLeaderHistories } from "./nodes/modifiers/shared";
+import {
+  clearAllAssets,
+  clearAllEventListeners,
+  clearAllLeaderHistories,
+} from "./nodes/modifiers/shared";
+import {
+  readStoredTemplate,
+  TEMPLATES,
+  type TemplateName,
+  writeStoredTemplate,
+} from "./templates";
 
-const initialNodes: Node[] = [
-  // {
-  //   id: "game",
-  //   type: "group",
-  //   position: { x: 120, y: 120 },
-  //   style: {
-  //     width: 400,
-  //     height: 250,
-  //   },
-  // },
-  {
-    id: "game-1",
-    type: "game",
-    position: { x: 700, y: 150 },
-    data: {
-      label: "Game",
-      width: 320,
-      height: 320,
-    },
-  },
-
-  {
-    id: "scene-1",
-    type: "scene",
-    position: { x: 300, y: 300 },
-    data: {
-      label: "Scene 1",
-      width: 400,
-      height: 400,
-      cellSize: 20,
-      backgroundColor: "black",
-      cameraX: 200,
-      cameraY: 200,
-      cameraZoom: 0.8,
-    },
-  },
-  // {
-  //   id: "1",
-  //   position: { x: 10, y: 10 },
-  //   data: { label: "1" },
-  //   // parentId: "game",
-  //   // extent: "parent",
-  // },
-  // {
-  //   id: "2",
-  //   type: "customNode",
-  //   position: { x: 120, y: 80 },
-  //   data: { label: "2" },
-  //   parentId: "game",
-  //   extent: "parent",
-  // },
-  {
-    id: "actor-1",
-    type: "actor",
-    position: {
-      x: 50,
-      y: 20,
-    },
-    style: { width: 240 },
-    data: {
-      label: "player",
-      pos: { x: 210, y: 210 },
-      color: "green",
-      collision: true,
-      tags: ["snake-head"],
-    },
-  },
-  {
-    id: "inputModifier-default",
-    type: "inputModifier",
-    parentId: "actor-1",
-    position: { x: 4, y: 9999 },
-    style: { width: 232 },
-    data: { controls: "wasd" },
-  },
-  {
-    id: "movementModifier-default",
-    type: "movementModifier",
-    parentId: "actor-1",
-    position: { x: 4, y: 9999 },
-    style: { width: 232 },
-    data: { style: "grid-step", speed: 100, tickMs: 150, cellSize: 20 },
-  },
-  {
-    id: "collisionRuleModifier-default",
-    type: "collisionRuleModifier",
-    parentId: "actor-1",
-    position: { x: 4, y: 9999 },
-    style: { width: 232 },
-    data: { target: "wall", action: "kill" },
-  },
-  {
-    id: "collisionRuleModifier-eat-grow",
-    type: "collisionRuleModifier",
-    parentId: "actor-1",
-    position: { x: 4, y: 9999 },
-    style: { width: 232 },
-    data: {
-      target: "food",
-      action: "growTail",
-      growTailFor: "snake-head",
-    },
-  },
-  {
-    id: "collisionRuleModifier-eat-respawn",
-    type: "collisionRuleModifier",
-    parentId: "actor-1",
-    position: { x: 4, y: 9999 },
-    style: { width: 232 },
-    data: {
-      target: "food",
-      action: "callSpawner",
-      spawnerTag: "food-spawner",
-    },
-  },
-  {
-    id: "collisionRuleModifier-eat-remove",
-    type: "collisionRuleModifier",
-    parentId: "actor-1",
-    position: { x: 4, y: 9999 },
-    style: { width: 232 },
-    data: {
-      target: "food",
-      action: "removeOther",
-    },
-  },
-  {
-    id: "collisionRuleModifier-self",
-    type: "collisionRuleModifier",
-    parentId: "actor-1",
-    position: { x: 4, y: 9999 },
-    style: { width: 232 },
-    data: {
-      target: "snake-tail",
-      action: "kill",
-    },
-  },
-  {
-    id: "tail-snake",
-    type: "tail",
-    position: { x: 350, y: 20 },
-    style: { width: 240 },
-    data: {
-      label: "Snake Tail",
-      leaderTag: "snake-head",
-      segmentTag: "snake-tail",
-      length: 1,
-      color: "green",
-      size: 20,
-    },
-  },
-  {
-    id: "graphicGroup-food",
-    type: "graphicGroup",
-    position: { x: 350, y: 420 },
-    data: {
-      label: "Food (template)",
-      groupX: 0,
-      groupY: 0,
-      collision: true,
-      invisible: false,
-      tags: ["food"],
-      shapes: [
-        {
-          id: "food-shape",
-          kind: "circle",
-          x: 0,
-          y: 0,
-          r: 8,
-          color: "red",
-        },
-      ],
-    },
-  },
-  {
-    id: "spawner-food",
-    type: "spawner",
-    position: { x: 650, y: 420 },
-    data: {
-      label: "Food Spawner",
-      tag: "food-spawner",
-      spawnOnLoad: true,
-      boundsX: 20,
-      boundsY: 20,
-      boundsW: 360,
-      boundsH: 360,
-    },
-  },
-  {
-    id: "graphicGroup-walls",
-    type: "graphicGroup",
-    position: { x: 50, y: 420 },
-    data: {
-      label: "Walls",
-      groupX: 0,
-      groupY: 0,
-      collision: true,
-      invisible: false,
-      tags: ["wall"],
-      shapes: [
-        {
-          id: "wall-top",
-          kind: "rect",
-          x: 200,
-          y: 10,
-          w: 400,
-          h: 20,
-          color: "gray",
-        },
-        {
-          id: "wall-bottom",
-          kind: "rect",
-          x: 200,
-          y: 390,
-          w: 400,
-          h: 20,
-          color: "gray",
-        },
-        {
-          id: "wall-left",
-          kind: "rect",
-          x: 10,
-          y: 200,
-          w: 20,
-          h: 400,
-          color: "gray",
-        },
-        {
-          id: "wall-right",
-          kind: "rect",
-          x: 390,
-          y: 200,
-          w: 20,
-          h: 400,
-          color: "gray",
-        },
-      ],
-    },
-  },
-];
-const initialEdges = [
-  { id: "e-a1-s1", source: "actor-1", target: "scene-1" },
-  { id: "e-tail-s1", source: "tail-snake", target: "scene-1" },
-  { id: "e-food-spawner", source: "graphicGroup-food", target: "spawner-food" },
-  { id: "e-spawner-s1", source: "spawner-food", target: "scene-1" },
-  { id: "e-walls-s1", source: "graphicGroup-walls", target: "scene-1" },
-  { id: "e-s1-g1", source: "scene-1", target: "game-1" },
-];
+// Initial graph is whichever template the user picked last (snake by default).
+// The template definitions live in src/templates/{snake,platformer}.ts.
+const initialTemplate: TemplateName = readStoredTemplate();
+const initialNodes: Node[] = TEMPLATES[initialTemplate].nodes;
+const initialEdges = TEMPLATES[initialTemplate].edges;
 
 type GameContextType = {
   engine: Engine | null;
@@ -300,6 +67,8 @@ type GameContextType = {
     target: string;
   }>;
   onConnect: OnConnect;
+  template: TemplateName;
+  loadTemplate: (name: TemplateName) => void;
 };
 
 const GameContext = createContext<GameContextType>({
@@ -316,6 +85,8 @@ const GameContext = createContext<GameContextType>({
   onNodesChange: () => {},
   onEdgesChange: () => {},
   onConnect: () => {},
+  template: "snake",
+  loadTemplate: () => {},
 });
 export const useGame = () => useContext(GameContext);
 
@@ -325,10 +96,53 @@ export default function App() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [entities, setEntities] = useState<Record<string, Entity | Scene>>({});
   const [resetTick, setResetTick] = useState(0);
+  const [template, setTemplate] = useState<TemplateName>(initialTemplate);
+
   const reset = useCallback(() => {
+    // Only transient (per-tick) state is cleared here. Event listeners and
+    // asset registries are owned by their respective React nodes' mount
+    // lifecycle; nuking them while those nodes are still mounted would
+    // leave the registries empty until the user re-edits each node.
+    // Template switches call those clears explicitly before swapping nodes.
     clearAllLeaderHistories();
     setResetTick((t) => t + 1);
   }, []);
+
+  const loadTemplate = useCallback(
+    (name: TemplateName) => {
+      if (name === template) return;
+      if (
+        nodes.length > 0 &&
+        !confirm(
+          `Replace the current graph with the ${TEMPLATES[name].label} template?`,
+        )
+      ) {
+        return;
+      }
+      // Asset / event registries are tied to the about-to-unmount nodes; wipe
+      // them so the new template starts from a clean slate without stale
+      // entries leaking across the switch.
+      clearAllEventListeners();
+      clearAllAssets();
+      clearAllLeaderHistories();
+      // Clear nodes/edges first so any reused component ids (e.g. actor-1)
+      // fully unmount before the new template mounts. Otherwise stateful
+      // hooks like useState(data.pos) keep the old template's values, and
+      // the new actor spawns at the wrong position.
+      setNodes([]);
+      setEdges([]);
+      setTemplate(name);
+      writeStoredTemplate(name);
+      // Re-populate on the next tick — same task queue, but a render in
+      // between guarantees unmount runs.
+      setTimeout(() => {
+        setNodes(TEMPLATES[name].nodes);
+        setEdges(TEMPLATES[name].edges);
+        setResetTick((t) => t + 1);
+      }, 0);
+    },
+    [template, nodes.length, setNodes, setEdges],
+  );
 
   const onConnect: OnConnect = useCallback(
     (params) => {
@@ -355,6 +169,8 @@ export default function App() {
           onConnect,
           onEdgesChange,
           onNodesChange,
+          template,
+          loadTemplate,
         }}
       >
         <Canvas />

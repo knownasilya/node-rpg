@@ -1,0 +1,195 @@
+import type { Node } from "@xyflow/react";
+
+// Pre-laid-out column positions matching sidebar.tsx's `cleanupLayout`:
+// col 0 = actor, col 1 = tail, col 2 = graphicGroup, col 3 = spawner,
+// col 4 = scene, col 5 = game. Each top-level node stakes out one column.
+
+export const snakeNodes: Node[] = [
+  {
+    id: "game-1",
+    type: "game",
+    position: { x: 1480, y: 40 },
+    data: {
+      label: "Game",
+      width: 320,
+      height: 320,
+    },
+  },
+  {
+    id: "scene-1",
+    type: "scene",
+    position: { x: 1160, y: 40 },
+    data: {
+      label: "Scene 1",
+      width: 400,
+      height: 400,
+      cellSize: 20,
+      backgroundColor: "black",
+      cameraX: 200,
+      cameraY: 200,
+      cameraZoom: 0.8,
+    },
+  },
+  {
+    id: "actor-1",
+    type: "actor",
+    position: { x: 40, y: 40 },
+    style: { width: 240 },
+    data: {
+      label: "player",
+      pos: { x: 210, y: 210 },
+      color: "green",
+      collision: true,
+      tags: ["snake-head"],
+    },
+  },
+  {
+    id: "inputModifier-default",
+    type: "inputModifier",
+    parentId: "actor-1",
+    position: { x: 4, y: 9999 },
+    style: { width: 232 },
+    data: { controls: "wasd" },
+  },
+  {
+    id: "movementModifier-default",
+    type: "movementModifier",
+    parentId: "actor-1",
+    position: { x: 4, y: 9999 },
+    style: { width: 232 },
+    data: { style: "grid-step", speed: 100, tickMs: 150, cellSize: 20 },
+  },
+  {
+    id: "collisionRuleModifier-default",
+    type: "collisionRuleModifier",
+    parentId: "actor-1",
+    position: { x: 4, y: 9999 },
+    style: { width: 232 },
+    data: { target: "wall", action: "kill" },
+  },
+  {
+    id: "collisionRuleModifier-eat-grow",
+    type: "collisionRuleModifier",
+    parentId: "actor-1",
+    position: { x: 4, y: 9999 },
+    style: { width: 232 },
+    data: {
+      target: "food",
+      action: "growTail",
+      growTailFor: "snake-head",
+    },
+  },
+  {
+    id: "collisionRuleModifier-eat-respawn",
+    type: "collisionRuleModifier",
+    parentId: "actor-1",
+    position: { x: 4, y: 9999 },
+    style: { width: 232 },
+    data: {
+      target: "food",
+      action: "callSpawner",
+      spawnerTag: "food-spawner",
+    },
+  },
+  {
+    id: "collisionRuleModifier-eat-remove",
+    type: "collisionRuleModifier",
+    parentId: "actor-1",
+    position: { x: 4, y: 9999 },
+    style: { width: 232 },
+    data: {
+      target: "food",
+      action: "removeOther",
+    },
+  },
+  {
+    id: "collisionRuleModifier-self",
+    type: "collisionRuleModifier",
+    parentId: "actor-1",
+    position: { x: 4, y: 9999 },
+    style: { width: 232 },
+    data: {
+      target: "snake-tail",
+      action: "kill",
+    },
+  },
+  {
+    id: "tail-snake",
+    type: "tail",
+    position: { x: 320, y: 40 },
+    style: { width: 240 },
+    data: {
+      label: "Snake Tail",
+      leaderTag: "snake-head",
+      segmentTag: "snake-tail",
+      length: 1,
+      color: "green",
+      size: 20,
+    },
+  },
+  {
+    id: "graphicGroup-food",
+    type: "graphicGroup",
+    position: { x: 600, y: 40 },
+    data: {
+      label: "Food (template)",
+      groupX: 0,
+      groupY: 0,
+      collision: true,
+      invisible: false,
+      tags: ["food"],
+      shapes: [
+        {
+          id: "food-shape",
+          kind: "circle",
+          x: 0,
+          y: 0,
+          r: 8,
+          color: "red",
+        },
+      ],
+    },
+  },
+  {
+    id: "spawner-food",
+    type: "spawner",
+    position: { x: 880, y: 40 },
+    data: {
+      label: "Food Spawner",
+      tag: "food-spawner",
+      spawnOnLoad: true,
+      boundsX: 20,
+      boundsY: 20,
+      boundsW: 360,
+      boundsH: 360,
+    },
+  },
+  {
+    id: "graphicGroup-walls",
+    type: "graphicGroup",
+    position: { x: 600, y: 440 },
+    data: {
+      label: "Walls",
+      groupX: 0,
+      groupY: 0,
+      collision: true,
+      invisible: false,
+      tags: ["wall"],
+      shapes: [
+        { id: "wall-top", kind: "rect", x: 200, y: 10, w: 400, h: 20, color: "gray" },
+        { id: "wall-bottom", kind: "rect", x: 200, y: 390, w: 400, h: 20, color: "gray" },
+        { id: "wall-left", kind: "rect", x: 10, y: 200, w: 20, h: 400, color: "gray" },
+        { id: "wall-right", kind: "rect", x: 390, y: 200, w: 20, h: 400, color: "gray" },
+      ],
+    },
+  },
+];
+
+export const snakeEdges = [
+  { id: "e-a1-s1", source: "actor-1", target: "scene-1" },
+  { id: "e-tail-s1", source: "tail-snake", target: "scene-1" },
+  { id: "e-food-spawner", source: "graphicGroup-food", target: "spawner-food" },
+  { id: "e-spawner-s1", source: "spawner-food", target: "scene-1" },
+  { id: "e-walls-s1", source: "graphicGroup-walls", target: "scene-1" },
+  { id: "e-s1-g1", source: "scene-1", target: "game-1" },
+];

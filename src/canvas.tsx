@@ -22,6 +22,11 @@ import InputModifier from "./nodes/modifiers/input";
 import MovementModifier from "./nodes/modifiers/movement";
 import CollisionRuleModifier from "./nodes/modifiers/collision";
 import FollowerModifier from "./nodes/modifiers/follower";
+import GravityModifier from "./nodes/modifiers/gravity";
+import GroundModifier from "./nodes/modifiers/ground";
+import JumpModifier from "./nodes/modifiers/jump";
+import PlatformerMovementModifier from "./nodes/modifiers/platformerMovement";
+import CameraFollowModifier from "./nodes/modifiers/cameraFollow";
 import { SLOT_WIDTH } from "./nodes/modifiers/shared";
 import Sidebar, { DRAG_MIME, MODIFIER_KINDS, NODE_KINDS } from "./sidebar";
 
@@ -37,6 +42,11 @@ const nodeTypes = {
   movementModifier: MovementModifier,
   collisionRuleModifier: CollisionRuleModifier,
   followerModifier: FollowerModifier,
+  gravityModifier: GravityModifier,
+  groundModifier: GroundModifier,
+  jumpModifier: JumpModifier,
+  platformerMovementModifier: PlatformerMovementModifier,
+  cameraFollowModifier: CameraFollowModifier,
 };
 
 const modifierDefaults: Record<string, Record<string, unknown>> = {
@@ -48,6 +58,34 @@ const modifierDefaults: Record<string, Record<string, unknown>> = {
     growTailFor: "snake-head",
   },
   followerModifier: { leaderTag: "snake-head", delay: 1 },
+  gravityModifier: { gravity: 1200, maxFallSpeed: 900, enabled: true },
+  groundModifier: {
+    solidTags: ["solid", "one-way-platform"],
+    emitTag: "player",
+  },
+  jumpModifier: {
+    jumpVelocity: 520,
+    variableHeightCutoff: 180,
+    coyoteMs: 100,
+    bufferMs: 120,
+    maxJumps: 1,
+    emitTag: "player",
+  },
+  platformerMovementModifier: {
+    maxSpeed: 220,
+    accel: 1800,
+    friction: 1600,
+    airControl: 0.7,
+  },
+  cameraFollowModifier: {
+    followX: true,
+    followY: true,
+    deadW: 60,
+    deadH: 40,
+    lerp: 0.12,
+    offsetX: 0,
+    offsetY: 0,
+  },
 };
 
 const nodeDefaults: Record<string, Record<string, unknown>> = {
