@@ -11,13 +11,13 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "game-1",
     type: "game",
-    position: { x: 1480, y: 40 },
+    position: { x: 2740, y: 40 },
     data: { label: "Game", width: 640, height: 360 },
   },
   {
     id: "scene-1",
     type: "scene",
-    position: { x: 1160, y: 40 },
+    position: { x: 2400, y: 40 },
     data: {
       label: "Tiled Level 1",
       width: 1600,
@@ -35,6 +35,8 @@ export const tiledPlatformerNodes: Node[] = [
     id: "actor-1",
     type: "actor",
     position: { x: 40, y: 40 },
+    // Player actor has ~19 modifiers, so this card is ~800px tall.
+    // Next actor (slime) starts at y=900 below.
     style: { width: 240 },
     data: {
       label: "player",
@@ -250,7 +252,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "graphicGroup-floor-tp",
     type: "graphicGroup",
-    position: { x: 320, y: 40 },
+    position: { x: 340, y: 40 },
     data: {
       label: "Fallback Floor",
       groupX: 800,
@@ -276,13 +278,13 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "image-player",
     type: "image",
-    position: { x: 320, y: 360 },
+    position: { x: 640, y: 40 },
     data: { label: "Player Image", src: "/sprites/knight.png" },
   },
   {
     id: "spritesheet-player",
     type: "spritesheet",
-    position: { x: 600, y: 360 },
+    position: { x: 940, y: 40 },
     // knight.png is 256×256. The actual character cells are 24×24 with a
     // 4-px outer margin and 8 px of spacing between cells — these settings
     // line up the numbered preview with each character pose.
@@ -299,7 +301,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "animation-idle",
     type: "animation",
-    position: { x: 880, y: 40 },
+    position: { x: 1500, y: 40 },
     data: {
       label: "Idle",
       frames: [0, 1, 2, 3],
@@ -310,7 +312,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "animation-run",
     type: "animation",
-    position: { x: 880, y: 280 },
+    position: { x: 1500, y: 200 },
     data: {
       label: "Run",
       frames: [32, 33, 34, 35],
@@ -321,7 +323,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "animation-jump",
     type: "animation",
-    position: { x: 880, y: 520 },
+    position: { x: 1500, y: 360 },
     data: {
       label: "Jump",
       frames: [0,1,2,3],
@@ -332,7 +334,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "animation-fall",
     type: "animation",
-    position: { x: 880, y: 760 },
+    position: { x: 1500, y: 520 },
     data: {
       label: "Fall",
       frames: [0,1,2,3],
@@ -345,7 +347,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "animation-knight-attack",
     type: "animation",
-    position: { x: 880, y: 1480 },
+    position: { x: 1500, y: 680 },
     data: {
       label: "Knight Attack",
       frames: [80, 81, 82, 83, 84, 85, 86, 87],
@@ -356,7 +358,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "animation-knight-hurt",
     type: "animation",
-    position: { x: 880, y: 1720 },
+    position: { x: 1500, y: 840 },
     data: {
       label: "Knight Hurt",
       frames: [96, 97],
@@ -367,7 +369,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "animation-knight-death",
     type: "animation",
-    position: { x: 880, y: 1960 },
+    position: { x: 1500, y: 1000 },
     data: {
       label: "Knight Death",
       frames: [112, 113, 114, 115],
@@ -381,13 +383,13 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "image-slime",
     type: "image",
-    position: { x: 320, y: 1480 },
+    position: { x: 640, y: 340 },
     data: { label: "Slime Image", src: "/sprites/slime_green.png" },
   },
   {
     id: "spritesheet-slime",
     type: "spritesheet",
-    position: { x: 600, y: 1080 },
+    position: { x: 940, y: 600 },
     data: {
       label: "Slime Sheet",
       columns: 4,
@@ -401,7 +403,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "animation-slime-idle",
     type: "animation",
-    position: { x: 880, y: 2200 },
+    position: { x: 1500, y: 1200 },
     data: {
       label: "Slime Idle",
       frames: [0, 1, 2, 3],
@@ -412,7 +414,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "animation-slime-death",
     type: "animation",
-    position: { x: 880, y: 2440 },
+    position: { x: 1500, y: 1360 },
     data: {
       label: "Slime Death",
       frames: [8, 9, 10, 11],
@@ -424,7 +426,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "actor-slime",
     type: "actor",
-    position: { x: 40, y: 1900 },
+    position: { x: 40, y: 900 },
     style: { width: 240 },
     data: {
       label: "slime",
@@ -526,7 +528,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "sound-jump",
     type: "sound",
-    position: { x: 320, y: 640 },
+    position: { x: 1800, y: 40 },
     data: {
       label: "Jump SFX",
       src: "/sounds/jump.wav",
@@ -537,7 +539,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "sound-land",
     type: "sound",
-    position: { x: 320, y: 880 },
+    position: { x: 1800, y: 240 },
     data: {
       label: "Land SFX",
       src: "/sounds/tap.wav",
@@ -549,13 +551,13 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "image-coin",
     type: "image",
-    position: { x: 320, y: 1120 },
+    position: { x: 640, y: 640 },
     data: { label: "Coin Image", src: "/sprites/coin.png" },
   },
   {
     id: "spritesheet-coin",
     type: "spritesheet",
-    position: { x: 600, y: 720 },
+    position: { x: 940, y: 920 },
     data: {
       label: "Coin Sheet",
       columns: 12,
@@ -569,7 +571,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "animation-coin-spin",
     type: "animation",
-    position: { x: 880, y: 1240 },
+    position: { x: 1500, y: 1520 },
     data: {
       label: "Coin Spin",
       frames: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
@@ -582,7 +584,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "sound-coin",
     type: "sound",
-    position: { x: 320, y: 1320 },
+    position: { x: 1800, y: 440 },
     data: {
       label: "Coin SFX",
       src: "/sounds/coin.wav",
@@ -598,7 +600,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "actor-coin",
     type: "actor",
-    position: { x: 40, y: 1200 },
+    position: { x: 40, y: 1300 },
     style: { width: 240 },
     data: {
       label: "coin",
@@ -633,7 +635,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "counter-coins",
     type: "counter",
-    position: { x: 1480, y: 480 },
+    position: { x: 340, y: 260 },
     data: {
       label: "Coins",
       eventName: "coin-collected",
@@ -645,7 +647,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "tiledMap-level1",
     type: "tiledMap",
-    position: { x: 880, y: 1000 },
+    position: { x: 2040, y: 40 },
     // Map is 20×12 tiles of 16 px → 320×192 px. With posY=200 the bottom of
     // the map sits at world-y=392 (just above the fallback floor at y=400),
     // so the map fills the lower half of the camera's view (60→420).
@@ -661,13 +663,13 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "image-world",
     type: "image",
-    position: { x: 40, y: 1600 },
+    position: { x: 640, y: 940 },
     data: { label: "World Tileset", src: "/sprites/world_tileset.png" },
   },
   {
     id: "spritesheet-world",
     type: "spritesheet",
-    position: { x: 280, y: 1600 },
+    position: { x: 940, y: 1200 },
     data: {
       label: "World Sheet",
       columns: 16,
@@ -681,7 +683,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "animation-sign",
     type: "animation",
-    position: { x: 520, y: 1600 },
+    position: { x: 1500, y: 1680 },
     // Frame 29 = row 1, col 13 of the world tileset — a wooden sign sprite.
     // User can tweak in the node UI if a different tile reads better.
     data: {
@@ -698,7 +700,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "actor-door",
     type: "actor",
-    position: { x: 760, y: 1600 },
+    position: { x: 40, y: 1500 },
     style: { width: 240 },
     data: {
       label: "door",
@@ -744,7 +746,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "scene-2",
     type: "scene",
-    position: { x: 1240, y: 600 },
+    position: { x: 2400, y: 400 },
     // Same camera defaults as scene-1 (1× zoom, centred on the map area)
     // so the level renders at the same scale; the CameraFollow modifier
     // on the player takes over once the player is added to this scene.
@@ -760,7 +762,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "tiledMap-level2",
     type: "tiledMap",
-    position: { x: 1240, y: 1000 },
+    position: { x: 2040, y: 600 },
     data: {
       label: "Level 2 Map",
       src: "/maps/level-2.tmj",
@@ -777,7 +779,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "scene-game-over",
     type: "scene",
-    position: { x: 1560, y: 600 },
+    position: { x: 2400, y: 760 },
     data: {
       label: "Game Over",
       backgroundColor: "#1a1a26",
@@ -799,7 +801,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "graphicGroup-gameover",
     type: "graphicGroup",
-    position: { x: 1560, y: 950 },
+    position: { x: 340, y: 440 },
     data: {
       label: "Game Over Text",
       groupX: 320,
@@ -833,7 +835,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "actor-restart-btn",
     type: "actor",
-    position: { x: 1860, y: 950 },
+    position: { x: 40, y: 1750 },
     style: { width: 240 },
     data: {
       label: "Restart Button",
@@ -855,7 +857,7 @@ export const tiledPlatformerNodes: Node[] = [
   {
     id: "graphicGroup-restart-btn-visual",
     type: "graphicGroup",
-    position: { x: 1860, y: 1180 },
+    position: { x: 340, y: 700 },
     data: {
       label: "Restart Button Skin",
       groupX: 320,
