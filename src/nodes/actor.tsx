@@ -245,7 +245,17 @@ export default function ActorNode({ id, data }: NodeProps) {
     // one Excalibur Actor per instance and skip the single-pos primary.
     // The first instance is also written to entities[id] so single-actor
     // modifier code paths (useParentActor) get a reasonable default.
-    const inst = instances;
+    //
+    // Read from `data.instances` (the canonical store) instead of the
+    // mirrored `instances` state to avoid a render-order race: when
+    // game.reset bumps resetTick AND the .tmj projection updates
+    // data.instances in the same React batch, the state-sync effect
+    // hasn't fired yet by the time this effect re-runs from resetTick,
+    // so `instances` state would still be the previous level's
+    // positions — recreating actors there before settling to the new
+    // positions a render later. Using data.instances directly skips
+    // that intermediate phantom.
+    const inst = (data.instances as Instance[] | undefined) ?? [];
     const createdEntries: Array<[string, Player]> = [];
     if (inst.length > 0) {
       const list = inst.map((i) =>
@@ -294,7 +304,9 @@ export default function ActorNode({ id, data }: NodeProps) {
     color,
     collision,
     id,
-    instancesKey,
+    // Key on data.instances (the canonical store) — see the comment
+    // above the inst-read inside the effect body.
+    dataInstancesKey,
     actorWidth,
     actorHeight,
     invisible,
