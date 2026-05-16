@@ -174,6 +174,13 @@ const PLAYER_GROUP = CollisionGroupManager.create(
   // Default mask is "everything" — strip out enemy.
   ~ENEMY_GROUP.category & 0xffffffff,
 );
+// Pickups (coins, hearts, …) should be visible to the player but
+// invisible to enemies, so a patrolling slime walks right over a coin
+// instead of bumping it. Same one-sided exclusion trick as PLAYER_GROUP.
+const PICKUP_GROUP = CollisionGroupManager.create(
+  "pickup",
+  ~ENEMY_GROUP.category & 0xffffffff,
+);
 
 export function collisionGroupForTags(
   tags: string[] | undefined,
@@ -181,6 +188,7 @@ export function collisionGroupForTags(
   if (!tags || tags.length === 0) return undefined;
   if (tags.includes("enemy")) return ENEMY_GROUP;
   if (tags.includes("player")) return PLAYER_GROUP;
+  if (tags.includes("coin") || tags.includes("pickup")) return PICKUP_GROUP;
   return undefined;
 }
 

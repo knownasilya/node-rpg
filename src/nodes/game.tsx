@@ -5,6 +5,7 @@ import {
   useHandleConnections,
   useNodes,
   useReactFlow,
+  useViewport,
 } from "@xyflow/react";
 import { Engine, PointerScope, Scene, WebAudio } from "excalibur";
 import { createPortal } from "preact/compat";
@@ -142,40 +143,70 @@ export default function Game({ id, data }: NodeProps) {
 
 
   // Track the placeholder's screen rect so we can overlay the portal-hosted
-  // canvas on top of it. Re-sync on React Flow viewport, on window scroll,
-  // on size changes, and on this node's own position changes. Wrapped in
-  // rAF because React Flow applies the viewport transform via direct DOM
-  // mutation in a rAF callback, so a synchronous sync after the state
-  // update would still read the pre-zoom bounding rect. A ResizeObserver
-  // catches non-transform resizes (panels, window) as a safety net.
-  // Continuously poll the placeholder's bounding rect via rAF. ResizeObserver
-  // doesn't fire for CSS `transform: scale()` (which is how React Flow zooms),
-  // and reading viewport.zoom-deps in a one-shot effect can miss the
-  // transform commit timing. Polling every frame is cheap and reliable.
+  // canvas on top of it. We need this because the canvas is rendered into
+  // `document.body` (via createPortal) — it lives OUTSIDE React Flow's
+  // transformed viewport, so the zoom doesn't scale it automatically.
+  //
+  // Approach: read the placeholder's `getBoundingClientRect()` on every
+  // viewport change. `useViewport()` re-renders this component whenever
+  // React Flow pans or zooms, and an extra rAF burst catches drag-induced
+  // node position changes that don't pass through viewport state. A
+  // ResizeObserver covers the remaining case where the surrounding panel
+  // or window resizes.
+  const viewport = useViewport();
+  const viewportKey = `${viewport.x}|${viewport.y}|${viewport.zoom}`;
   useEffect(() => {
-    let active = true;
-    let last = previewRect;
-    const tick = () => {
-      if (!active) return;
+    const sync = () => {
       const el = placeholderRef.current;
-      if (el) {
-        const r = el.getBoundingClientRect();
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setPreviewRect((prev) => {
         if (
-          r.left !== last.left ||
-          r.top !== last.top ||
-          r.width !== last.w ||
-          r.height !== last.h
-        ) {
-          last = { left: r.left, top: r.top, w: r.width, h: r.height };
-          setPreviewRect(last);
-        }
-      }
-      requestAnimationFrame(tick);
+          prev.left === r.left &&
+          prev.top === r.top &&
+          prev.w === r.width &&
+          prev.h === r.height
+        )
+          return prev;
+        return { left: r.left, top: r.top, w: r.width, h: r.height };
+      });
     };
-    const id = requestAnimationFrame(tick);
+    // Two rAFs: the first lets React Flow commit its transform, the
+    // second lets the browser apply layout before we read.
+    const r1 = requestAnimationFrame(() => {
+      sync();
+      requestAnimationFrame(sync);
+    });
+    return () => cancelAnimationFrame(r1);
+  }, [viewportKey, width, height]);
+
+  // Window resize / panel resize fallback. The viewport-keyed effect
+  // above handles every zoom + pan, but a sidebar drag or window resize
+  // doesn't bump the viewport.
+  useEffect(() => {
+    const el = placeholderRef.current;
+    if (!el) return;
+    const sync = () => {
+      const r = el.getBoundingClientRect();
+      setPreviewRect((prev) => {
+        if (
+          prev.left === r.left &&
+          prev.top === r.top &&
+          prev.w === r.width &&
+          prev.h === r.height
+        )
+          return prev;
+        return { left: r.left, top: r.top, w: r.width, h: r.height };
+      });
+    };
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    window.addEventListener("resize", sync);
+    window.addEventListener("scroll", sync, true);
     return () => {
-      active = false;
-      cancelAnimationFrame(id);
+      ro.disconnect();
+      window.removeEventListener("resize", sync);
+      window.removeEventListener("scroll", sync, true);
     };
   }, []);
 
@@ -320,6 +351,34 @@ export default function Game({ id, data }: NodeProps) {
           }
         />
         <NodeBody>
+          <Field label="scene">
+            <select
+              className="nrpg-select"
+              value={
+                (game.engine as any)?.currentSceneName ??
+                scenes.find((s) => !!s)?.id ??
+                ""
+              }
+              onChange={(e) => {
+                const target = e.currentTarget.value;
+                if (!target) return;
+                try {
+                  game.engine?.goToScene(target);
+                } catch (err) {
+                  console.warn("[game] goToScene failed", err);
+                }
+              }}
+              title="Jump to a scene (debug)"
+            >
+              {scenes
+                .filter((s): s is NonNullable<typeof s> => !!s)
+                .map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {((s.data as any)?.label as string | undefined) ?? s.id}
+                  </option>
+                ))}
+            </select>
+          </Field>
           <Field label="width">
             <input
               type="number"

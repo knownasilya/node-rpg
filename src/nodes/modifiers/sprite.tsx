@@ -1,6 +1,6 @@
 import { NodeProps, useNodes, useReactFlow } from "@xyflow/react";
 import { useEffect, useState } from "preact/hooks";
-import { Field } from "../../ui";
+import { Field, ModShell } from "../../ui";
 import {
   getImage,
   getSpritesheet,
@@ -13,7 +13,7 @@ import {
 // `actor.graphics.use(...)` — no Component is attached, since the data is
 // editor-state, not gameplay-state.
 
-export default function SpriteModifier({ data, parentId }: NodeProps) {
+export default function SpriteModifier({ id, data, parentId }: NodeProps) {
   const actor = useParentActor(parentId);
   const reactFlow = useReactFlow();
   const allNodes = useNodes();
@@ -61,20 +61,17 @@ export default function SpriteModifier({ data, parentId }: NodeProps) {
     };
   }, [actor, imageNodeId, spritesheetNodeId, frameIndex, assetVersion]);
 
+  const summary = spritesheetNodeId
+    ? `${spritesheetNodeId} • ${frameIndex}`
+    : imageNodeId || "(none)";
   return (
-    <div
-      className="nrpg-mod"
-      style={{ ["--accent" as any]: "var(--accent-entity)" }}
+    <ModShell
+      id={id}
+      data={data}
+      accent="var(--accent-entity)"
+      title="Sprite"
+      summary={summary}
     >
-      <div className="nrpg-mod-accent" />
-      <div className="nrpg-mod-header">
-        <span
-          className="nrpg-header-dot"
-          style={{ background: "var(--accent-entity)" }}
-        />
-        Sprite
-      </div>
-      <div className="nrpg-mod-body nodrag">
         <Field label="image">
           <select
             className="nrpg-select"
@@ -126,7 +123,6 @@ export default function SpriteModifier({ data, parentId }: NodeProps) {
             />
           </Field>
         )}
-      </div>
-    </div>
+    </ModShell>
   );
 }

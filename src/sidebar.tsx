@@ -204,6 +204,18 @@ export const MODIFIER_KINDS: ItemDef[] = [
     accent: "movement",
     description: "Oscillate horizontally between bounds (simple enemy AI).",
   },
+  {
+    kind: "sceneSwitchModifier",
+    label: "Scene Switch",
+    accent: "scene",
+    description: "Listen for an event or key, then go to a target scene.",
+  },
+  {
+    kind: "clickModifier",
+    label: "Click",
+    accent: "input",
+    description: "Emit an event when the actor is clicked (makes it a button).",
+  },
 ];
 
 export const DRAG_MIME = "application/reactflow-kind";

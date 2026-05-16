@@ -1,11 +1,11 @@
 import { NodeProps } from "@xyflow/react";
 import { vec } from "excalibur";
 import { useEffect, useState } from "preact/hooks";
-import { Field, Toggle } from "../../ui";
+import { Field, ModShell, Toggle } from "../../ui";
 import { CameraFollowComponent } from "./ecs";
 import { useParentActor } from "./shared";
 
-export default function CameraFollowModifier({ data, parentId }: NodeProps) {
+export default function CameraFollowModifier({ id, data, parentId }: NodeProps) {
   const actor = useParentActor(parentId);
   const [followX, setFollowX] = useState<boolean>(
     (data.followX as boolean | undefined) ?? true,
@@ -54,20 +54,15 @@ export default function CameraFollowModifier({ data, parentId }: NodeProps) {
     };
   }, [actor, followX, followY, deadW, deadH, lerp, offsetX, offsetY]);
 
+  const axes = `${followX ? "x" : ""}${followY ? "y" : ""}`;
   return (
-    <div
-      className="nrpg-mod"
-      style={{ ["--accent" as any]: "var(--accent-scene)" }}
+    <ModShell
+      id={id}
+      data={data}
+      accent="var(--accent-scene)"
+      title="Camera"
+      summary={`follow ${axes || "none"}`}
     >
-      <div className="nrpg-mod-accent" />
-      <div className="nrpg-mod-header">
-        <span
-          className="nrpg-header-dot"
-          style={{ background: "var(--accent-scene)" }}
-        />
-        Camera
-      </div>
-      <div className="nrpg-mod-body nodrag">
         <Toggle label="follow x" checked={followX} onChange={setFollowX} />
         <Toggle label="follow y" checked={followY} onChange={setFollowY} />
         <Field label="dead w">
@@ -113,7 +108,6 @@ export default function CameraFollowModifier({ data, parentId }: NodeProps) {
             onChange={(e) => setOffsetY(+e.currentTarget.value)}
           />
         </Field>
-      </div>
-    </div>
+    </ModShell>
   );
 }

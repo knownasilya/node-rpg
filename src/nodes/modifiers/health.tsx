@@ -1,12 +1,12 @@
 import { NodeProps } from "@xyflow/react";
 import { useEffect, useState } from "preact/hooks";
-import { Field } from "../../ui";
+import { Field, ModShell } from "../../ui";
 import { HealthComponent, type OnZero } from "./ecs";
 import { useParentActors } from "./shared";
 
 const ON_ZERO_OPTIONS: OnZero[] = ["kill", "respawn", "emit"];
 
-export default function HealthModifier({ data, parentId }: NodeProps) {
+export default function HealthModifier({ id, data, parentId }: NodeProps) {
   const actors = useParentActors(parentId);
   const actorsKey = actors.map((a) => a.id).join(",");
   const [max, setMax] = useState<number>(
@@ -39,19 +39,13 @@ export default function HealthModifier({ data, parentId }: NodeProps) {
   }, [actorsKey, max, onZero, emitEvent]);
 
   return (
-    <div
-      className="nrpg-mod"
-      style={{ ["--accent" as any]: "var(--accent-collision)" }}
+    <ModShell
+      id={id}
+      data={data}
+      accent="var(--accent-collision)"
+      title="Health"
+      summary={`${max} hp → ${onZero}${onZero === "emit" && emitEvent ? ` "${emitEvent}"` : ""}`}
     >
-      <div className="nrpg-mod-accent" />
-      <div className="nrpg-mod-header">
-        <span
-          className="nrpg-header-dot"
-          style={{ background: "var(--accent-collision)" }}
-        />
-        Health
-      </div>
-      <div className="nrpg-mod-body nodrag">
         <Field label="max">
           <input
             type="number"
@@ -86,7 +80,6 @@ export default function HealthModifier({ data, parentId }: NodeProps) {
             />
           </Field>
         )}
-      </div>
-    </div>
+    </ModShell>
   );
 }

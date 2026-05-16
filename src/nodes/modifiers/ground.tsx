@@ -1,29 +1,27 @@
 import { NodeProps } from "@xyflow/react";
 import { useEffect, useState } from "preact/hooks";
-import { Field } from "../../ui";
+import { Field, ModShell, TagsField } from "../../ui";
 import { GroundedComponent } from "./ecs";
-import { parseTags, tagsToString, useParentActor } from "./shared";
+import { useParentActor } from "./shared";
 
-export default function GroundModifier({ data, parentId }: NodeProps) {
+export default function GroundModifier({ id, data, parentId }: NodeProps) {
   const actor = useParentActor(parentId);
-  const [solidTagsText, setSolidTagsText] = useState<string>(
-    tagsToString(
-      (data.solidTags as string[] | undefined) ?? ["solid", "one-way-platform"],
-    ),
+  const [solidTags, setSolidTags] = useState<string[]>(
+    (data.solidTags as string[] | undefined) ?? ["solid", "one-way-platform"],
   );
   const [emitTag, setEmitTag] = useState<string>(
     (data.emitTag as string | undefined) ?? "",
   );
+  const solidTagsKey = solidTags.join(",");
 
   useEffect(() => {
     if (!actor) return;
-    const tags = parseTags(solidTagsText);
     const existing = actor.get(GroundedComponent);
     if (existing) {
-      existing.solidTags = tags;
+      existing.solidTags = solidTags;
       existing.emitTag = emitTag.trim() || undefined;
     } else {
-      const gc = new GroundedComponent(tags);
+      const gc = new GroundedComponent(solidTags);
       gc.emitTag = emitTag.trim() || undefined;
       actor.addComponent(gc);
     }
@@ -32,43 +30,34 @@ export default function GroundModifier({ data, parentId }: NodeProps) {
         actor.removeComponent(GroundedComponent);
       }
     };
-  }, [actor, solidTagsText, emitTag]);
+  }, [actor, solidTagsKey, emitTag]);
 
   return (
-    <div
-      className="nrpg-mod"
-      style={{ ["--accent" as any]: "var(--accent-collision)" }}
+    <ModShell
+      id={id}
+      data={data}
+      accent="var(--accent-collision)"
+      title="Ground"
+      summary={solidTags.join(", ")}
     >
-      <div className="nrpg-mod-accent" />
-      <div className="nrpg-mod-header">
-        <span
-          className="nrpg-header-dot"
-          style={{ background: "var(--accent-collision)" }}
+      <Field label="solid tags">
+        <TagsField
+          value={solidTags}
+          onChange={setSolidTags}
+          width={110}
+          placeholder="solid"
         />
-        Ground
-      </div>
-      <div className="nrpg-mod-body nodrag">
-        <Field label="solid tags">
-          <input
-            type="text"
-            className="nrpg-input"
-            style={{ width: 110, textAlign: "left" }}
-            value={solidTagsText}
-            placeholder="solid, one-way-platform"
-            onChange={(e) => setSolidTagsText(e.currentTarget.value)}
-          />
-        </Field>
-        <Field label="emit tag">
-          <input
-            type="text"
-            className="nrpg-input"
-            style={{ width: 110, textAlign: "left" }}
-            value={emitTag}
-            placeholder="e.g. player"
-            onChange={(e) => setEmitTag(e.currentTarget.value)}
-          />
-        </Field>
-      </div>
-    </div>
+      </Field>
+      <Field label="emit tag">
+        <input
+          type="text"
+          className="nrpg-input"
+          style={{ width: 110, textAlign: "left" }}
+          value={emitTag}
+          placeholder="e.g. player"
+          onChange={(e) => setEmitTag(e.currentTarget.value)}
+        />
+      </Field>
+    </ModShell>
   );
 }

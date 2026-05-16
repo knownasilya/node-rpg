@@ -58,6 +58,17 @@ export default function SpritesheetNode({ id, data }: NodeProps) {
   const [spacing, setSpacing] = useState<number>(
     (data.spacing as number | undefined) ?? 0,
   );
+  // User-resizable preview pane. Defaults match the original maxW=240
+  // single-column footprint; the browser's CSS resize handle lets the
+  // user drag a wider preview when working with denser sheets like
+  // world_tileset (256×256, 16×16 tiles).
+  const [previewWidth, setPreviewWidth] = useState<number>(
+    (data.previewWidth as number | undefined) ?? 240,
+  );
+  const [previewHeight, setPreviewHeight] = useState<number>(
+    (data.previewHeight as number | undefined) ?? 240,
+  );
+  const previewBoxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!imageNodeId) {
@@ -140,9 +151,13 @@ export default function SpritesheetNode({ id, data }: NodeProps) {
     const draw = () => {
       const img: HTMLImageElement | undefined = (image as any).image;
       if (!img) return;
-      // Fit image into preview width; aspect-preserve.
-      const maxW = 240;
-      const scale = Math.min(1, maxW / img.naturalWidth);
+      // Fit image into the user-resizable preview pane, aspect-preserve.
+      // Both dimensions count: the canvas scales up to the smaller axis
+      // of (pane / natural) so the whole sheet stays visible.
+      const padPx = 8;
+      const maxW = Math.max(64, previewWidth - padPx);
+      const maxH = Math.max(64, previewHeight - padPx);
+      const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 4);
       const w = Math.max(1, Math.floor(img.naturalWidth * scale));
       const h = Math.max(1, Math.floor(img.naturalHeight * scale));
       canvas.width = w;
@@ -202,11 +217,60 @@ export default function SpritesheetNode({ id, data }: NodeProps) {
     margin,
     spacing,
     showPreview,
+    previewWidth,
+    previewHeight,
     assetVersion,
   ]);
 
+  // Track the user-resized preview pane via ResizeObserver. The browser
+  // `resize: both` CSS handle mutates the inline width/height directly;
+  // we sync that back into node state so the canvas redraws and the size
+  // persists. Reading `borderBoxSize` (not clientWidth, which strips the
+  // border) means the value we write back equals the value the next
+  // render applies — no slow-growth feedback loop on mount.
+  useEffect(() => {
+    if (!showPreview) return;
+    const el = previewBoxRef.current;
+    if (!el) return;
+    let raf = 0;
+    let firstFire = true;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      // Skip the initial fire — observers fire once on observe() with
+      // the current box, which would write our React state right back
+      // out (occasionally as a slightly different rounded value, which
+      // is what kept the node "growing" on canvas load).
+      if (firstFire) {
+        firstFire = false;
+        return;
+      }
+      const box = entry.borderBoxSize?.[0];
+      const w = Math.round(
+        box ? box.inlineSize : el.getBoundingClientRect().width,
+      );
+      const h = Math.round(
+        box ? box.blockSize : el.getBoundingClientRect().height,
+      );
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        if (w === previewWidth && h === previewHeight) return;
+        setPreviewWidth(w);
+        setPreviewHeight(h);
+        reactFlow.updateNodeData(id, { previewWidth: w, previewHeight: h });
+      });
+    });
+    ro.observe(el);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [showPreview, id]);
+
+  const cardWidth = showPreview ? Math.max(360, previewWidth + 200) : 240;
+
   return (
-    <NodeCard accent="entity" style={{ minWidth: 240 }}>
+    <NodeCard accent="entity" style={{ minWidth: cardWidth }}>
       <NodeHeader
         title={(data.label as string) ?? "Spritesheet"}
         subtitle="spritesheet"
@@ -229,118 +293,147 @@ export default function SpritesheetNode({ id, data }: NodeProps) {
         outputs={["Animation"]}
       />
       <NodeBody>
-        <div style={{ fontSize: 11, color: "var(--text-subtle)" }}>
-          {imageNodeId
-            ? `image: ${imageNodeId}`
-            : "(connect an Image to slice)"}
-        </div>
-        <Field label="cols">
-          <input
-            type="number"
-            min={1}
-            className="nrpg-input"
-            value={columns}
-            onChange={(e) => {
-              const v = +e.currentTarget.value;
-              setColumns(v);
-              reactFlow.updateNodeData(id, { columns: v });
-            }}
-          />
-        </Field>
-        <Field label="rows">
-          <input
-            type="number"
-            min={1}
-            className="nrpg-input"
-            value={rows}
-            onChange={(e) => {
-              const v = +e.currentTarget.value;
-              setRows(v);
-              reactFlow.updateNodeData(id, { rows: v });
-            }}
-          />
-        </Field>
-        <Field label="frame w">
-          <input
-            type="number"
-            className="nrpg-input"
-            value={frameWidth}
-            onChange={(e) => {
-              const v = +e.currentTarget.value;
-              setFrameWidth(v);
-              reactFlow.updateNodeData(id, { frameWidth: v });
-            }}
-          />
-        </Field>
-        <Field label="frame h">
-          <input
-            type="number"
-            className="nrpg-input"
-            value={frameHeight}
-            onChange={(e) => {
-              const v = +e.currentTarget.value;
-              setFrameHeight(v);
-              reactFlow.updateNodeData(id, { frameHeight: v });
-            }}
-          />
-        </Field>
-        <Field label="margin">
-          <input
-            type="number"
-            className="nrpg-input"
-            value={margin}
-            onChange={(e) => {
-              const v = +e.currentTarget.value;
-              setMargin(v);
-              reactFlow.updateNodeData(id, { margin: v });
-            }}
-          />
-        </Field>
-        <Field label="spacing">
-          <input
-            type="number"
-            className="nrpg-input"
-            value={spacing}
-            onChange={(e) => {
-              const v = +e.currentTarget.value;
-              setSpacing(v);
-              reactFlow.updateNodeData(id, { spacing: v });
-            }}
-          />
-        </Field>
-        <Toggle
-          label="preview"
-          checked={showPreview}
-          onChange={(v) => {
-            setShowPreview(v);
-            reactFlow.updateNodeData(id, { showPreview: v });
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            alignItems: "stretch",
+            // Switch to single-column when preview is off.
+            flexDirection: showPreview ? "row" : "column",
           }}
-        />
-        {showPreview && (
-          <div
-            style={{
-              padding: 4,
-              background: "#0b0d12",
-              borderRadius: 4,
-              border: "1px solid var(--border-strong)",
-              overflow: "auto",
-              maxHeight: 260,
-            }}
-          >
-            <canvas
-              ref={previewRef}
-              style={{
-                display: imageNodeId ? "block" : "none",
-                imageRendering: "pixelated",
+        >
+          <div style={{ flex: "0 0 auto", minWidth: 160 }}>
+            <div style={{ fontSize: 11, color: "var(--text-subtle)", marginBottom: 4 }}>
+              {imageNodeId
+                ? `image: ${imageNodeId}`
+                : "(connect an Image to slice)"}
+            </div>
+            <Field label="cols">
+              <input
+                type="number"
+                min={1}
+                className="nrpg-input"
+                value={columns}
+                onChange={(e) => {
+                  const v = +e.currentTarget.value;
+                  setColumns(v);
+                  reactFlow.updateNodeData(id, { columns: v });
+                }}
+              />
+            </Field>
+            <Field label="rows">
+              <input
+                type="number"
+                min={1}
+                className="nrpg-input"
+                value={rows}
+                onChange={(e) => {
+                  const v = +e.currentTarget.value;
+                  setRows(v);
+                  reactFlow.updateNodeData(id, { rows: v });
+                }}
+              />
+            </Field>
+            <Field label="frame w">
+              <input
+                type="number"
+                className="nrpg-input"
+                value={frameWidth}
+                onChange={(e) => {
+                  const v = +e.currentTarget.value;
+                  setFrameWidth(v);
+                  reactFlow.updateNodeData(id, { frameWidth: v });
+                }}
+              />
+            </Field>
+            <Field label="frame h">
+              <input
+                type="number"
+                className="nrpg-input"
+                value={frameHeight}
+                onChange={(e) => {
+                  const v = +e.currentTarget.value;
+                  setFrameHeight(v);
+                  reactFlow.updateNodeData(id, { frameHeight: v });
+                }}
+              />
+            </Field>
+            <Field label="margin">
+              <input
+                type="number"
+                className="nrpg-input"
+                value={margin}
+                onChange={(e) => {
+                  const v = +e.currentTarget.value;
+                  setMargin(v);
+                  reactFlow.updateNodeData(id, { margin: v });
+                }}
+              />
+            </Field>
+            <Field label="spacing">
+              <input
+                type="number"
+                className="nrpg-input"
+                value={spacing}
+                onChange={(e) => {
+                  const v = +e.currentTarget.value;
+                  setSpacing(v);
+                  reactFlow.updateNodeData(id, { spacing: v });
+                }}
+              />
+            </Field>
+            <Toggle
+              label="preview"
+              checked={showPreview}
+              onChange={(v) => {
+                setShowPreview(v);
+                reactFlow.updateNodeData(id, { showPreview: v });
               }}
             />
-            {!imageNodeId && (
-              <div style={{ fontSize: 10, color: "var(--text-subtle)" }}>
-                (connect an Image to preview)
-              </div>
-            )}
           </div>
-        )}
+          {showPreview && (
+            <div
+              ref={previewBoxRef}
+              className="nodrag"
+              style={{
+                // `flex: 0 0 auto` so the pane stays exactly at its inline
+                // width — without this it stretched to fill the card and
+                // each resize observation wrote a slightly larger value
+                // back through cardWidth, growing the node forever.
+                flex: "0 0 auto",
+                padding: 4,
+                background: "var(--bg)",
+                borderRadius: 4,
+                border: "1px solid var(--border-strong)",
+                // No scrollbars — the canvas inside is scaled to fit, so
+                // hide overflow rather than offering scroll thumbs that
+                // also tweak the resize-observer measurements.
+                overflow: "hidden",
+                width: previewWidth,
+                height: previewHeight,
+                minWidth: 120,
+                minHeight: 120,
+                // Native browser resize grip in the bottom-right.
+                resize: "both",
+                boxSizing: "border-box",
+              }}
+              title="Drag the bottom-right corner to resize the preview"
+            >
+              <canvas
+                ref={previewRef}
+                style={{
+                  display: imageNodeId ? "block" : "none",
+                  imageRendering: "pixelated",
+                }}
+              />
+              {!imageNodeId && (
+                <div style={{ fontSize: 10, color: "var(--text-subtle)" }}>
+                  (connect an Image to preview)
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </NodeBody>
     </NodeCard>
   );

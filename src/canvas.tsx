@@ -35,6 +35,8 @@ import HurtboxModifier from "./nodes/modifiers/hurtbox";
 import HealthModifier from "./nodes/modifiers/health";
 import AttackModifier from "./nodes/modifiers/attack";
 import PatrolModifier from "./nodes/modifiers/patrol";
+import SceneSwitchModifier from "./nodes/modifiers/sceneSwitch";
+import ClickModifier from "./nodes/modifiers/click";
 import ImageNode from "./nodes/assets/image";
 import SpritesheetNode from "./nodes/assets/spritesheet";
 import AnimationNode from "./nodes/assets/animation";
@@ -69,6 +71,8 @@ const nodeTypes = {
   healthModifier: HealthModifier,
   attackModifier: AttackModifier,
   patrolModifier: PatrolModifier,
+  sceneSwitchModifier: SceneSwitchModifier,
+  clickModifier: ClickModifier,
   image: ImageNode,
   spritesheet: SpritesheetNode,
   animation: AnimationNode,
@@ -157,6 +161,16 @@ const modifierDefaults: Record<string, Record<string, unknown>> = {
     range: 48,
     startDirection: "right",
     pauseAtTurnMs: 0,
+  },
+  sceneSwitchModifier: {
+    eventName: "",
+    keyCode: "",
+    targetSceneId: "",
+    alsoReset: false,
+  },
+  clickModifier: {
+    eventName: "",
+    hoverCursor: true,
   },
 };
 

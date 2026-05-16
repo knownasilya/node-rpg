@@ -13,18 +13,21 @@ import {
   NodeCard,
   NodeHeader,
   Swatch,
+  TagsField,
   Toggle,
 } from "../ui";
-import { applyTags, parseTags, tagsToString } from "./modifiers/shared";
+import { applyTags } from "./modifiers/shared";
 import {
   Actor,
   Circle as CircleGraphic,
   CollisionType,
   Color,
   CompositeCollider,
+  Font,
   GraphicsGroup,
   Rectangle as RectangleGraphic,
   Shape as ExShape,
+  Text as TextGraphic,
   vec,
 } from "excalibur";
 import { useEffect, useRef, useState } from "preact/hooks";
@@ -48,11 +51,12 @@ const cssColor = (k: string): string => {
 
 type Shape =
   | { id: string; kind: "rect"; x: number; y: number; w: number; h: number; color: ColorKey }
-  | { id: string; kind: "circle"; x: number; y: number; r: number; color: ColorKey };
+  | { id: string; kind: "circle"; x: number; y: number; r: number; color: ColorKey }
+  | { id: string; kind: "text"; x: number; y: number; text: string; size: number; color: ColorKey };
 
 const colorFor = (k: ColorKey) => colors[k] ?? Color.Red;
 
-function makeShapeId(kind: "rect" | "circle"): string {
+function makeShapeId(kind: "rect" | "circle" | "text"): string {
   return `${kind}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 }
 
@@ -61,6 +65,17 @@ function defaultRect(): Shape {
 }
 function defaultCircle(): Shape {
   return { id: makeShapeId("circle"), kind: "circle", x: 0, y: 0, r: 15, color: "blue" };
+}
+function defaultText(): Shape {
+  return {
+    id: makeShapeId("text"),
+    kind: "text",
+    x: 0,
+    y: 0,
+    text: "TEXT",
+    size: 16,
+    color: "white",
+  };
 }
 
 export default function GraphicGroupNode({ id, data }: NodeProps) {
@@ -116,11 +131,14 @@ export default function GraphicGroupNode({ id, data }: NodeProps) {
   useEffect(() => {
     if (!game.engine || !edge || !edge.target.startsWith("scene-")) return;
 
-    const colliders = shapes.map((s) =>
-      s.kind === "rect"
-        ? ExShape.Box(s.w, s.h, undefined, vec(s.x, s.y))
-        : ExShape.Circle(s.r, vec(s.x, s.y))
-    );
+    const colliders = shapes
+      // Text shapes are visual-only — no collider.
+      .filter((s) => s.kind !== "text")
+      .map((s) =>
+        s.kind === "rect"
+          ? ExShape.Box(s.w, s.h, undefined, vec(s.x, s.y))
+          : ExShape.Circle((s as any).r, vec(s.x, s.y)),
+      );
     const collider =
       colliders.length === 0
         ? ExShape.Box(1, 1)
@@ -137,6 +155,20 @@ export default function GraphicGroupNode({ id, data }: NodeProps) {
             color: colorFor(s.color),
           }),
           offset: vec(s.x - s.w / 2, s.y - s.h / 2),
+        };
+      }
+      if (s.kind === "text") {
+        const font = new Font({
+          size: s.size,
+          family: "system-ui, sans-serif",
+          color: colorFor(s.color),
+        });
+        const txt = new TextGraphic({ text: s.text, font });
+        return {
+          graphic: txt,
+          // Best-effort top-left anchor — exact text metrics depend on
+          // the rasterized font; users tweak x/y to fine-tune.
+          offset: vec(s.x, s.y),
         };
       }
       return {
@@ -249,14 +281,7 @@ export default function GraphicGroupNode({ id, data }: NodeProps) {
         </div>
 
         <Field label="tags">
-          <input
-            type="text"
-            className="nrpg-input"
-            style={{ width: 140, textAlign: "left" }}
-            value={tagsToString(tags)}
-            placeholder="e.g. wall, danger"
-            onChange={(e) => setTags(parseTags(e.currentTarget.value))}
-          />
+          <TagsField value={tags} onChange={setTags} placeholder="e.g. wall" />
         </Field>
         <Field label="physics">
           <select
@@ -281,6 +306,12 @@ export default function GraphicGroupNode({ id, data }: NodeProps) {
             onClick={() => setShapes((s) => [...s, defaultRect()])}
           >
             + Rect
+          </Button>
+          <Button
+            className="primary"
+            onClick={() => setShapes((s) => [...s, defaultText()])}
+          >
+            + Text
           </Button>
           <Button
             className="primary"
@@ -331,7 +362,7 @@ export default function GraphicGroupNode({ id, data }: NodeProps) {
           <div key={s.id} className="nrpg-shape-row">
             <div className="nrpg-shape-row-head">
               <span className="nrpg-shape-glyph">
-                {s.kind === "rect" ? "▢" : "◯"}
+                {s.kind === "rect" ? "▢" : s.kind === "circle" ? "◯" : "T"}
               </span>
               <Swatch color={cssColor(s.color)} />
               <span className="nrpg-shape-name">{s.kind}</span>
@@ -392,7 +423,7 @@ export default function GraphicGroupNode({ id, data }: NodeProps) {
                     />
                   </label>
                 </>
-              ) : (
+              ) : s.kind === "circle" ? (
                 <label>
                   r
                   <input
@@ -404,6 +435,33 @@ export default function GraphicGroupNode({ id, data }: NodeProps) {
                     }
                   />
                 </label>
+              ) : (
+                <>
+                  <label style={{ flex: "1 1 100%" }}>
+                    text
+                    <input
+                      type="text"
+                      className="nrpg-input"
+                      style={{ width: "100%", textAlign: "left" }}
+                      value={s.text}
+                      onChange={(e) =>
+                        updateShape(i, { text: e.currentTarget.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    size
+                    <input
+                      type="number"
+                      className="nrpg-input"
+                      value={s.size}
+                      min={4}
+                      onChange={(e) =>
+                        updateShape(i, { size: +e.currentTarget.value })
+                      }
+                    />
+                  </label>
+                </>
               )}
               <label>
                 color
@@ -492,11 +550,19 @@ function EntityEditView({
         minY = Math.min(minY, wy - s.h / 2);
         maxX = Math.max(maxX, wx + s.w / 2);
         maxY = Math.max(maxY, wy + s.h / 2);
-      } else {
+      } else if (s.kind === "circle") {
         minX = Math.min(minX, wx - s.r);
         minY = Math.min(minY, wy - s.r);
         maxX = Math.max(maxX, wx + s.r);
         maxY = Math.max(maxY, wy + s.r);
+      } else {
+        // text — approximate bounds by size; layout doesn't need to be exact
+        const approxW = (s.text?.length ?? 0) * s.size * 0.55;
+        const approxH = s.size;
+        minX = Math.min(minX, wx);
+        minY = Math.min(minY, wy);
+        maxX = Math.max(maxX, wx + approxW);
+        maxY = Math.max(maxY, wy + approxH);
       }
     }
     if (maxX - minX < 100) {
@@ -655,6 +721,25 @@ function EntityEditView({
               />
             );
           }
+          if (s.kind === "text") {
+            return (
+              <text
+                key={s.id}
+                x={w2sX(wx)}
+                y={w2sY(wy) + s.size * scale}
+                fontSize={s.size * scale}
+                fontFamily="system-ui, sans-serif"
+                fill={cssColor(s.color)}
+                stroke={stroke}
+                strokeWidth={strokeWidth}
+                style={{ cursor: "grab" }}
+                onMouseDown={(e) => onShapeMouseDown(e, s)}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {s.text}
+              </text>
+            );
+          }
           return (
             <circle
               key={s.id}
@@ -722,7 +807,7 @@ function EntityEditView({
                   />
                 </label>
               </>
-            ) : (
+            ) : selected.kind === "circle" ? (
               <label>
                 r:{" "}
                 <input
@@ -734,6 +819,31 @@ function EntityEditView({
                   }
                 />
               </label>
+            ) : (
+              <>
+                <label>
+                  text:{" "}
+                  <input
+                    type="text"
+                    value={selected.text}
+                    style={{ width: 120 }}
+                    onChange={(e) =>
+                      onUpdate(selected.id, { text: e.currentTarget.value })
+                    }
+                  />
+                </label>
+                <label>
+                  size:{" "}
+                  <input
+                    type="number"
+                    value={selected.size}
+                    style={{ width: 50 }}
+                    onChange={(e) =>
+                      onUpdate(selected.id, { size: +e.currentTarget.value })
+                    }
+                  />
+                </label>
+              </>
             )}
             <label>
               color:{" "}

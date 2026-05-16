@@ -8,6 +8,7 @@ import { TiledResource } from "@excaliburjs/plugin-tiled";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { Field, NodeBody, NodeCard, NodeHeader, Toggle } from "../../ui";
 import { registerTiledMap, unregisterTiledMap } from "../modifiers/shared";
+import { assetUrl } from "../../url";
 
 // Loads a Tiled .tmj / .tmx via the official Excalibur Tiled plugin. The
 // Scene node consumes the TiledResource via its incoming edge to mount tile
@@ -126,7 +127,7 @@ export default function TiledMapNode({ id, data }: NodeProps) {
       setSelectedCell(null);
       return;
     }
-    const tmx = new TiledResource(import.meta.env.BASE_URL + trimmed, {
+    const tmx = new TiledResource(assetUrl(trimmed), {
       useTilemapCameraStrategy: false,
     });
     registerTiledMap(id, tmx);
@@ -187,8 +188,12 @@ export default function TiledMapNode({ id, data }: NodeProps) {
           tilewidth: map.tilewidth,
           tileheight: map.tileheight,
         });
-        // Tilesets — resolve image and tile-level properties.
-        const baseUrl = new URL(trimmed, window.location.origin);
+        // Tilesets — resolve image and tile-level properties. Resolve
+        // the tileset relative URL against the .tmj's full BASE_URL path
+        // so that when the app is hosted under a subpath (e.g. GitHub
+        // Pages at `/node-rpg/`), the preview's tileset images load
+        // from `/node-rpg/...` instead of falling back to `/...`.
+        const baseUrl = new URL(assetUrl(trimmed), window.location.origin);
         const slices: TilesetSlice[] = [];
         for (const ts of map.tilesets ?? []) {
           if (!ts?.image) continue;

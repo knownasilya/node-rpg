@@ -29,6 +29,7 @@ import {
 import { useEffect, useRef, useState } from "preact/hooks";
 import { useGame } from "../App";
 import { registerEcsSystems } from "./modifiers/ecs";
+import { registerAnimationSelectorSystem } from "./modifiers/animation";
 import { getTiledMap, useAssetVersion } from "./modifiers/shared";
 
 const bgColors = {
@@ -42,6 +43,65 @@ const bgColors = {
 } as const;
 
 type BgColorKey = keyof typeof bgColors;
+
+// Per-scene Tiled-projection registry. Each scene's .tmj is parsed into
+// a `byClass` map at .tmj-mount time and stored here. On scene-activate
+// we apply that scene's map to `actor.data.instances` so actors live at
+// the activated scene's spawn positions. Without this, two scenes'
+// .tmjs would race to overwrite the same actor's instances on load.
+type ProjectionByClass = Record<
+  string,
+  Array<{ id: string; x: number; y: number }>
+>;
+const sceneProjections = new Map<string, ProjectionByClass>();
+const sceneProjectionTmjLabels = new Map<string, string>();
+const sceneProjectionTmjNodeIds = new Map<string, string>();
+
+function computeProjections(
+  tmx: any,
+  px: number,
+  py: number,
+): ProjectionByClass {
+  const out: ProjectionByClass = {};
+  const tiledMap: any = (tmx as any).map;
+  const rawLayers: any[] = tiledMap?.layers ?? [];
+  for (const layer of rawLayers) {
+    if (layer?.type !== "objectgroup") continue;
+    const objects: any[] = layer.objects ?? [];
+    for (const obj of objects) {
+      const cls = (obj?.class || obj?.type || "").trim();
+      if (!cls) continue;
+      const w = obj.width ?? 0;
+      const h = obj.height ?? 0;
+      const wx = px + (obj.x ?? 0) + w / 2;
+      const wy = py + (obj.y ?? 0) + h / 2;
+      const list = out[cls] ?? (out[cls] = []);
+      list.push({ id: `tmj-${cls}-${obj.id ?? list.length}`, x: wx, y: wy });
+    }
+  }
+  return out;
+}
+
+function applyProjectionsToActors(
+  reactFlow: any,
+  nodes: any[],
+  byClass: ProjectionByClass,
+  source: { kind: "tiledMap"; nodeId: string; label: string },
+): void {
+  for (const [cls, positions] of Object.entries(byClass)) {
+    const actorNode = nodes.find(
+      (n: any) =>
+        n.type === "actor" &&
+        Array.isArray((n.data as any)?.tags) &&
+        ((n.data as any).tags as string[]).includes(cls),
+    );
+    if (!actorNode) continue;
+    reactFlow.updateNodeData(actorNode.id, {
+      instances: positions,
+      instancesSource: source,
+    });
+  }
+}
 
 const WALL_THICKNESS = 4;
 const WALL_EDGES = ["top", "bottom", "left", "right"] as const;
@@ -142,11 +202,97 @@ export default function SceneNode({ id, data }: NodeProps) {
   const [cameraZoom, setCameraZoom] = useState<number>(
     (data.cameraZoom as number | undefined) ?? 0.25
   );
+  // Bumps each time the engine activates THIS scene. Used as a dep of
+  // the actor-claim effect so orphan actors connected to a previously-
+  // inactive scene get added the moment the user navigates to it.
+  const [activatedTick, setActivatedTick] = useState(0);
+  // Refs so the scene's `activate` listener (installed once with deps=[]
+  // when the Scene is constructed) always reads the LATEST nodes /
+  // reactFlow without re-binding on every render.
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
+  const reactFlowRef = useRef(reactFlow);
+  reactFlowRef.current = reactFlow;
+  const gameEntitiesRef = useRef(game.entities);
+  gameEntitiesRef.current = game.entities;
 
   useEffect(() => {
     const scene = new Scene();
     scene.backgroundColor = bgColors[bgColorKey];
     registerEcsSystems(scene);
+    // Register the AnimationSelectorSystem eagerly so any Actor that gets
+    // added to this scene later picks up its animations on frame 1,
+    // including .tmj-projected instances whose modifiers may have run
+    // before scene assignment.
+    registerAnimationSelectorSystem(scene);
+
+    // Apply this scene's .tmj projections to actor instances every
+    // time the scene becomes active. With multiple scenes connected to
+    // one Game node, this is what re-positions the player / slimes /
+    // coins / doors to the new scene's spawn points on transition.
+    const onActivate = () => {
+      // Trigger the actor-claim effect — actors connected to a scene
+      // that wasn't current at startup (e.g. game-over) are orphans
+      // until we get here.
+      setActivatedTick((t) => t + 1);
+      // Pull connected actors that ARE in another scene over to this
+      // one, so debug-switching via the Game node dropdown actually
+      // moves the player (and anything else multi-scene) instead of
+      // leaving them in the previous scene. Recreated actors picked up
+      // by the claim effect cover the fresh-actor case; this loop
+      // covers the "already-living-elsewhere" case.
+      const latestNodes = nodesRef.current;
+      const latestEntities = gameEntitiesRef.current;
+      const myEdges = (reactFlowRef.current.getEdges?.() ?? []).filter(
+        (e) => e.target === id,
+      );
+      for (const e of myEdges) {
+        const sourceNode = latestNodes.find((n) => n.id === e.source);
+        if (!sourceNode) continue;
+        if (
+          sourceNode.type !== "actor" &&
+          sourceNode.type !== "graphicGroup" &&
+          sourceNode.type !== "tail"
+        )
+          continue;
+        const candidates: Actor[] = [];
+        const primary = latestEntities[sourceNode.id];
+        if (primary instanceof Actor) candidates.push(primary);
+        for (const key of Object.keys(latestEntities)) {
+          if (!key.startsWith(`${sourceNode.id}__inst-`)) continue;
+          const v = latestEntities[key];
+          if (v instanceof Actor) candidates.push(v);
+        }
+        for (const actor of candidates) {
+          if (actor.scene === scene) continue;
+          if (actor.isKilled?.()) continue;
+          try {
+            actor.scene?.remove(actor);
+          } catch {}
+          try {
+            scene.add(actor);
+          } catch {}
+        }
+      }
+      const byClass = sceneProjections.get(id);
+      if (!byClass) return;
+      const tmjLabel = sceneProjectionTmjLabels.get(id) ?? id;
+      const tmjNodeId = sceneProjectionTmjNodeIds.get(id) ?? id;
+      applyProjectionsToActors(
+        reactFlowRef.current,
+        nodesRef.current,
+        byClass,
+        {
+          kind: "tiledMap",
+          nodeId: tmjNodeId,
+          label: tmjLabel,
+        },
+      );
+    };
+    let activateSub: { close?: () => void } | undefined;
+    try {
+      activateSub = (scene as any).on?.("activate", onActivate);
+    } catch {}
 
     game.setEntities((entities) => {
       return { ...entities, [id]: scene };
@@ -156,6 +302,10 @@ export default function SceneNode({ id, data }: NodeProps) {
     return () => {
       console.log("killing scene", id);
       sceneRef.current = undefined;
+
+      try {
+        activateSub?.close?.();
+      } catch {}
 
       game.engine?.goToScene("root");
 
@@ -245,29 +395,48 @@ export default function SceneNode({ id, data }: NodeProps) {
   const assetVersion = useAssetVersion();
 
   useEffect(() => {
-    if (connectedNodes.length && sceneRef.current) {
-      connectedNodes.forEach((item) => {
-        if (!item) return;
-        // Collect every Excalibur Actor associated with this React Flow
-        // node: the primary at entities[id] plus any instance actors
-        // stored under `${id}__inst-...` (when the Actor is templated).
-        const candidates = new Set<Actor>();
-        const primary = game.entities[item.id];
-        if (primary instanceof Actor) candidates.add(primary);
-        for (const key of Object.keys(game.entities)) {
-          if (!key.startsWith(`${item.id}__inst-`)) continue;
-          const e = game.entities[key];
-          if (e instanceof Actor) candidates.add(e);
-        }
-        for (const actor of candidates) {
-          if (actor.scene === sceneRef.current) continue;
-          if (actor.isKilled?.()) continue;
-          if (actor.scene && actor.scene !== sceneRef.current) continue;
-          sceneRef.current?.add(actor);
-        }
-      });
+    if (!connectedNodes.length || !sceneRef.current) return;
+    // Only claim newly-created Actors when this scene is the engine's
+    // CURRENT one. Otherwise both scene-1 and scene-2 effects race to
+    // add the same fresh actor (after a reset) and the loser becomes a
+    // ghost in a non-active scene — which is what made the player
+    // disappear on restart. Switching scenes triggers `onActivate`
+    // which calls back here (via reset of game.entities timing) so
+    // actors get re-claimed by the new active scene.
+    const engine = game.engine as any;
+    const curScene = engine?.currentScene;
+    const curSceneName = engine?.currentSceneName;
+    const amActive =
+      !curScene ||
+      curScene === sceneRef.current ||
+      curSceneName === id ||
+      // Tolerate the placeholder "root" scene used before navigation —
+      // accept claims while no scene is meaningfully current.
+      curSceneName === "root";
+    if (!amActive) {
+      // Take a less aggressive pass: if the actor has NO scene at all,
+      // claim it as a fallback so we don't leak orphans. But never
+      // steal an actor already living in another scene.
     }
-  }, [game.engine, connectedNodes, game.entities]);
+    connectedNodes.forEach((item) => {
+      if (!item) return;
+      const candidates = new Set<Actor>();
+      const primary = game.entities[item.id];
+      if (primary instanceof Actor) candidates.add(primary);
+      for (const key of Object.keys(game.entities)) {
+        if (!key.startsWith(`${item.id}__inst-`)) continue;
+        const e = game.entities[key];
+        if (e instanceof Actor) candidates.add(e);
+      }
+      for (const actor of candidates) {
+        if (actor.scene === sceneRef.current) continue;
+        if (actor.isKilled?.()) continue;
+        if (actor.scene) continue; // already in some scene; let it stay
+        if (!amActive) continue;
+        sceneRef.current?.add(actor);
+      }
+    });
+  }, [game.engine, connectedNodes, game.entities, game.resetTick, id, activatedTick]);
 
   // Mount any connected Tiled maps. We await the resource's load promise
   // (idempotent — the asset node also kicks off load on its own), then
@@ -366,46 +535,30 @@ export default function SceneNode({ id, data }: NodeProps) {
         console.info(
           `[scene:${id}] mounted Tiled map ${node.id} at (${px}, ${py}); layers=${tmx.layers?.length ?? "?"}`,
         );
-        // Project the .tmj's object-layer entries into Actor `instances`.
-        // The Tiled object `class` (e.g. "player", "slime") is matched
-        // directly against actor tags — so an actor tagged "slime" with
-        // three .tmj objects of class="slime" gets three instances. The
-        // actor's own effect then recreates one Excalibur Actor per
-        // entry at the world position recorded in the .tmj. Works for
-        // both single-spawn (player) and multi-spawn (enemies).
-        const tiledMap: any = (tmx as any).map;
-        const rawLayers: any[] = tiledMap?.layers ?? [];
-        const byClass: Record<
-          string,
-          Array<{ id: string; x: number; y: number }>
-        > = {};
-        for (const layer of rawLayers) {
-          if (layer?.type !== "objectgroup") continue;
-          const objects: any[] = layer.objects ?? [];
-          for (const obj of objects) {
-            const cls = (obj?.class || obj?.type || "").trim();
-            if (!cls) continue;
-            const w = obj.width ?? 0;
-            const h = obj.height ?? 0;
-            const wx = px + (obj.x ?? 0) + w / 2;
-            const wy = py + (obj.y ?? 0) + h / 2;
-            const list = byClass[cls] ?? (byClass[cls] = []);
-            list.push({ id: `tmj-${cls}-${obj.id ?? list.length}`, x: wx, y: wy });
-          }
-        }
-        // Tiled object `class` (== `type` in older Tiled exports) is
-        // matched directly against actor tags. So a .tmj object with
-        // class="slime" looks up the Actor tagged "slime" and projects
-        // every matching object as an instance of that actor.
-        for (const [cls, positions] of Object.entries(byClass)) {
-          const actorNode = nodes.find(
-            (n) =>
-              n.type === "actor" &&
-              Array.isArray((n.data as any)?.tags) &&
-              ((n.data as any).tags as string[]).includes(cls),
-          );
-          if (!actorNode) continue;
-          reactFlow.updateNodeData(actorNode.id, { instances: positions });
+        // Project the .tmj's object-layer entries into the per-scene
+        // projection registry. We DON'T write to actor.data.instances
+        // here because both scenes' .tmjs would race to overwrite the
+        // same actor's instances on load — whichever finished last
+        // would win, leaving the player at the wrong spawn. The
+        // projection is replayed on scene-activate (see effect below)
+        // so each scene's positions are applied only when that scene
+        // is the active one.
+        const tmjLabel =
+          ((node.data as any)?.label as string | undefined) ?? node.id;
+        sceneProjections.set(id, computeProjections(tmx, px, py));
+        sceneProjectionTmjLabels.set(id, tmjLabel);
+        sceneProjectionTmjNodeIds.set(id, node.id);
+        // If this scene is already the active scene, apply immediately —
+        // otherwise the onActivate hook below picks it up.
+        if (
+          (game.engine as any)?.currentScene === scene ||
+          (game.engine as any)?.currentSceneName === id
+        ) {
+          applyProjectionsToActors(reactFlow, nodes, sceneProjections.get(id)!, {
+            kind: "tiledMap",
+            nodeId: node.id,
+            label: tmjLabel,
+          });
         }
       } catch (err) {
         console.warn(`[scene:${id}] tiled mount failed`, node.id, err);

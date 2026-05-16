@@ -8,7 +8,7 @@ import {
   World,
 } from "excalibur";
 import { useEffect, useState } from "preact/hooks";
-import { Field, Toggle } from "../../ui";
+import { Field, ModShell, Toggle } from "../../ui";
 import {
   GroundedComponent,
   RequestedHeadingComponent,
@@ -176,6 +176,19 @@ function ensureSelectorSystem(actor: any): void {
   } catch {}
 }
 
+// Called from scene.tsx as soon as the Scene is constructed so the
+// selector runs from frame 1. Without this, an Actor that's added to
+// the scene AFTER its animation modifier first ran (e.g. .tmj-projected
+// slimes / coins) had no AnimationSelectorSystem on the scene and the
+// sprite/animation never applied — the actor stayed a colored rect.
+export function registerAnimationSelectorSystem(scene: any): void {
+  if (!scene || REGISTERED_SCENES.has(scene)) return;
+  try {
+    scene.world.add(AnimationSelectorSystem);
+    REGISTERED_SCENES.add(scene);
+  } catch {}
+}
+
 export default function AnimationModifier({ id, data, parentId }: NodeProps) {
   const reactFlow = useReactFlow();
   const actors = useParentActors(parentId);
@@ -254,20 +267,17 @@ export default function AnimationModifier({ id, data, parentId }: NodeProps) {
   const valueFor = (s: State, left: boolean) =>
     left ? statesLeft[s] ?? "" : states[s] ?? "";
 
+  const wiredStates = STATES.filter((s) => states[s]);
+  const summary =
+    wiredStates.length === 0 ? "(no states)" : wiredStates.join(", ");
   return (
-    <div
-      className="nrpg-mod"
-      style={{ ["--accent" as any]: "var(--accent-entity)" }}
+    <ModShell
+      id={id}
+      data={data}
+      accent="var(--accent-entity)"
+      title="Animation"
+      summary={summary}
     >
-      <div className="nrpg-mod-accent" />
-      <div className="nrpg-mod-header">
-        <span
-          className="nrpg-header-dot"
-          style={{ background: "var(--accent-entity)" }}
-        />
-        Animation
-      </div>
-      <div className="nrpg-mod-body nodrag">
         {STATES.map((s) => (
           <Field key={s} label={s}>
             <select
@@ -325,8 +335,7 @@ export default function AnimationModifier({ id, data, parentId }: NodeProps) {
             ))}
           </>
         )}
-      </div>
-    </div>
+    </ModShell>
   );
 }
 

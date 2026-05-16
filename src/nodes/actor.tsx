@@ -11,13 +11,11 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import {
   applyTags,
   collisionGroupForTags,
-  parseTags,
   SLOT_GAP,
   SLOT_X,
-  tagsToString,
 } from "./modifiers/shared";
 import { InitialPosComponent } from "./modifiers/ecs";
-import { Button, Field, NodeBody, NodeCard, NodeHeader, Toggle } from "../ui";
+import { Button, Field, NodeBody, NodeCard, NodeHeader, TagsField, Toggle } from "../ui";
 import { Actor, ActorArgs, CollisionType, Color } from "excalibur";
 
 const colors = {
@@ -149,6 +147,9 @@ export default function ActorNode({ id, data }: NodeProps) {
   const [tags, setTags] = useState<string[]>(
     (data.tags as string[] | undefined) ?? ["player"]
   );
+  const actorWidth = (data.width as number | undefined) ?? 20;
+  const actorHeight = (data.height as number | undefined) ?? 20;
+  const invisible = (data.invisible as boolean | undefined) ?? false;
   // Instances: an optional array of { id, x, y } that converts this Actor
   // into a *template* — one Excalibur Actor is created per instance with
   // identical color/tags/collision and its own position. Modifiers attach
@@ -172,13 +173,24 @@ export default function ActorNode({ id, data }: NodeProps) {
     );
   }, [dataInstancesKey]);
   const instancesKey = JSON.stringify(instances);
+  // If scene.tsx populated `instances` from a Tiled object layer, it
+  // stashes the source on `data.instancesSource` — surface a chip so
+  // the user knows these positions live in the .tmj file.
+  type InstancesSource = { kind: "tiledMap"; nodeId: string; label: string };
+  const instancesSource = data.instancesSource as InstancesSource | undefined;
 
   useEffect(() => {
+    // When the Actor is templated by `instances` (multi-spawn or .tmj
+    // projection), each Excalibur Actor already lives at its own
+    // instance position. Don't yank the primary mirror back to the
+    // manual `pos` field — that would teleport it on top of whatever
+    // happens to be near the editor x/y defaults.
+    if (instances.length > 0) return;
     if (actor && actor === game.entities[id]) {
       actor.pos.x = pos.x;
       actor.pos.y = pos.y;
     }
-  }, [pos, actor?.id, id]);
+  }, [pos, actor?.id, id, instancesKey]);
 
   useEffect(() => {
     if (actor) {
@@ -200,8 +212,8 @@ export default function ActorNode({ id, data }: NodeProps) {
           color,
           x,
           y,
-          width: 20,
-          height: 20,
+          width: actorWidth,
+          height: actorHeight,
           collisionType: collision
             ? CollisionType.Active
             : CollisionType.PreventCollision,
@@ -211,6 +223,11 @@ export default function ActorNode({ id, data }: NodeProps) {
       applyTags(a, tags);
       a.addComponent(new InitialPosComponent(a.pos.clone()));
       a.body.canSleep = false;
+      // `invisible` hides Excalibur's default colored-rect graphic while
+      // keeping the collider live — used for "hitbox-only" actors like
+      // the Game Over restart button, whose look is painted by a sibling
+      // graphic group.
+      if (invisible) a.graphics.visible = false;
       // Assign a collision group based on tags so the same gameplay tag
       // ("player" / "enemy") also drives which actors physically push each
       // other. Player and enemy bodies share masks that exclude each
@@ -252,7 +269,18 @@ export default function ActorNode({ id, data }: NodeProps) {
 
     return () => {
       for (const [, a] of createdEntries) {
-        if (a.scene) a.kill();
+        // Always kill AND force-remove from whatever scene the actor is
+        // in. Excalibur's `kill()` only flags the actor; removal is
+        // processed on the next world tick. That left a brief window
+        // where the doomed actor still rendered after we recreated a
+        // fresh one (e.g. the level-2 sign showed up in level-1 after
+        // restart). The explicit `scene.remove` short-circuits that.
+        try {
+          a.scene?.remove(a);
+        } catch {}
+        try {
+          a.kill();
+        } catch {}
       }
       game.setEntities((entities) => {
         const next = { ...entities };
@@ -267,6 +295,9 @@ export default function ActorNode({ id, data }: NodeProps) {
     collision,
     id,
     instancesKey,
+    actorWidth,
+    actorHeight,
+    invisible,
     game.resetTick,
   ]);
 
@@ -366,14 +397,7 @@ export default function ActorNode({ id, data }: NodeProps) {
             onChange={setCollision}
           />
           <Field label="tags">
-            <input
-              type="text"
-              className="nrpg-input"
-              style={{ width: 140, textAlign: "left" }}
-              value={tagsToString(tags)}
-              placeholder="e.g. player"
-              onChange={(e) => setTags(parseTags(e.currentTarget.value))}
-            />
+            <TagsField value={tags} onChange={setTags} placeholder="e.g. player" />
           </Field>
           <div
             style={{
@@ -395,6 +419,27 @@ export default function ActorNode({ id, data }: NodeProps) {
               }}
             >
               instances ({instances.length})
+              {instancesSource?.kind === "tiledMap" && (
+                <span
+                  title={`Sourced from Tiled map "${instancesSource.label}"`}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 3,
+                    marginLeft: 6,
+                    padding: "1px 6px",
+                    borderRadius: 8,
+                    background: "var(--bg-subtle)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text-muted)",
+                    fontSize: 9,
+                    textTransform: "none",
+                    letterSpacing: 0,
+                  }}
+                >
+                  🔗 {instancesSource.label}
+                </span>
+              )}
             </span>
             <Button
               onClick={() => {
@@ -409,7 +454,10 @@ export default function ActorNode({ id, data }: NodeProps) {
                   },
                 ];
                 setInstances(next);
-                reactFlow.updateNodeData(id, { instances: next });
+                reactFlow.updateNodeData(id, {
+                  instances: next,
+                  instancesSource: null,
+                });
               }}
               title="Spawn another copy of this Actor at its own position"
             >
@@ -466,7 +514,10 @@ export default function ActorNode({ id, data }: NodeProps) {
                       idx === i ? { ...it, x: v } : it,
                     );
                     setInstances(next);
-                    reactFlow.updateNodeData(id, { instances: next });
+                    reactFlow.updateNodeData(id, {
+                      instances: next,
+                      instancesSource: null,
+                    });
                   }}
                 />
               </label>
@@ -485,7 +536,10 @@ export default function ActorNode({ id, data }: NodeProps) {
                       idx === i ? { ...it, y: v } : it,
                     );
                     setInstances(next);
-                    reactFlow.updateNodeData(id, { instances: next });
+                    reactFlow.updateNodeData(id, {
+                      instances: next,
+                      instancesSource: null,
+                    });
                   }}
                 />
               </label>
@@ -495,7 +549,10 @@ export default function ActorNode({ id, data }: NodeProps) {
                 onClick={() => {
                   const next = instances.filter((_, idx) => idx !== i);
                   setInstances(next);
-                  reactFlow.updateNodeData(id, { instances: next });
+                  reactFlow.updateNodeData(id, {
+                    instances: next,
+                    instancesSource: null,
+                  });
                 }}
                 title="Remove this instance"
               >

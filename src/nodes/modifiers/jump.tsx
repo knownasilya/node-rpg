@@ -1,7 +1,7 @@
 import { NodeProps } from "@xyflow/react";
 import { Keys } from "excalibur";
 import { useEffect, useState } from "preact/hooks";
-import { Field } from "../../ui";
+import { Field, ModShell } from "../../ui";
 import { GroundedComponent, JumpComponent } from "./ecs";
 import { useParentActor } from "./shared";
 
@@ -13,7 +13,7 @@ const KEY_OPTIONS: { label: string; value: Keys }[] = [
   { label: "K", value: Keys.K },
 ];
 
-export default function JumpModifier({ data, parentId }: NodeProps) {
+export default function JumpModifier({ id, data, parentId }: NodeProps) {
   const actor = useParentActor(parentId);
   const [jumpVelocity, setJumpVelocity] = useState<number>(
     (data.jumpVelocity as number | undefined) ?? 520,
@@ -82,19 +82,13 @@ export default function JumpModifier({ data, parentId }: NodeProps) {
   ]);
 
   return (
-    <div
-      className="nrpg-mod"
-      style={{ ["--accent" as any]: "var(--accent-movement)" }}
+    <ModShell
+      id={id}
+      data={data}
+      accent="var(--accent-movement)"
+      title="Jump"
+      summary={`${String(jumpKey).replace(/^Key/, "")} • v ${jumpVelocity}`}
     >
-      <div className="nrpg-mod-accent" />
-      <div className="nrpg-mod-header">
-        <span
-          className="nrpg-header-dot"
-          style={{ background: "var(--accent-movement)" }}
-        />
-        Jump
-      </div>
-      <div className="nrpg-mod-body nodrag">
         <Field label="key">
           <select
             className="nrpg-select"
@@ -163,7 +157,6 @@ export default function JumpModifier({ data, parentId }: NodeProps) {
             onChange={(e) => setEmitTag(e.currentTarget.value)}
           />
         </Field>
-      </div>
-    </div>
+    </ModShell>
   );
 }

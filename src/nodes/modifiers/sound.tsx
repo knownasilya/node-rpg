@@ -1,6 +1,6 @@
 import { NodeProps, useNodes } from "@xyflow/react";
 import { useEffect, useState } from "preact/hooks";
-import { Field } from "../../ui";
+import { Field, ModShell } from "../../ui";
 import {
   getSound,
   getSoundBaseVolume,
@@ -14,7 +14,7 @@ import {
 // sound plays at the configured volume. Pairs naturally with the platformer
 // Jump/Ground emitters and the new collision rule actions that emit events.
 
-export default function SoundModifier({ data, parentId }: NodeProps) {
+export default function SoundModifier({ id, data, parentId }: NodeProps) {
   const actor = useParentActor(parentId);
   const allNodes = useNodes();
   const soundNodes = allNodes.filter((n) => n.type === "sound");
@@ -48,19 +48,13 @@ export default function SoundModifier({ data, parentId }: NodeProps) {
   }, [actor, soundNodeId, eventName, volume, assetVersion]);
 
   return (
-    <div
-      className="nrpg-mod"
-      style={{ ["--accent" as any]: "var(--accent-entity)" }}
+    <ModShell
+      id={id}
+      data={data}
+      accent="var(--accent-entity)"
+      title="Sound"
+      summary={`when ${eventName || "?"}`}
     >
-      <div className="nrpg-mod-accent" />
-      <div className="nrpg-mod-header">
-        <span
-          className="nrpg-header-dot"
-          style={{ background: "var(--accent-entity)" }}
-        />
-        Sound
-      </div>
-      <div className="nrpg-mod-body nodrag">
         <Field label="sound">
           <select
             className="nrpg-select"
@@ -96,7 +90,6 @@ export default function SoundModifier({ data, parentId }: NodeProps) {
             onChange={(e) => setVolume(+e.currentTarget.value)}
           />
         </Field>
-      </div>
-    </div>
+    </ModShell>
   );
 }

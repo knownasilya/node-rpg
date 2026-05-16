@@ -1,10 +1,10 @@
 import { NodeProps } from "@xyflow/react";
 import { useEffect, useState } from "preact/hooks";
-import { Field } from "../../ui";
+import { Field, ModShell } from "../../ui";
 import { FollowerComponent } from "./ecs";
 import { useParentActor } from "./shared";
 
-export default function FollowerModifier({ data, parentId }: NodeProps) {
+export default function FollowerModifier({ id, data, parentId }: NodeProps) {
   const actor = useParentActor(parentId);
   const [leaderTag, setLeaderTag] = useState<string>(
     (data.leaderTag as string | undefined) ?? "snake-head",
@@ -34,19 +34,13 @@ export default function FollowerModifier({ data, parentId }: NodeProps) {
   }, [actor, leaderTag, delay]);
 
   return (
-    <div
-      className="nrpg-mod"
-      style={{ ["--accent" as any]: "var(--accent-follower)" }}
+    <ModShell
+      id={id}
+      data={data}
+      accent="var(--accent-follower)"
+      title="Follow"
+      summary={`${leaderTag || "?"} @ delay ${delay}`}
     >
-      <div className="nrpg-mod-accent" />
-      <div className="nrpg-mod-header">
-        <span
-          className="nrpg-header-dot"
-          style={{ background: "var(--accent-follower)" }}
-        />
-        Follow
-      </div>
-      <div className="nrpg-mod-body nodrag">
         <Field label="leader tag">
           <input
             type="text"
@@ -66,7 +60,6 @@ export default function FollowerModifier({ data, parentId }: NodeProps) {
             onChange={(e) => setDelay(+e.currentTarget.value)}
           />
         </Field>
-      </div>
-    </div>
+    </ModShell>
   );
 }

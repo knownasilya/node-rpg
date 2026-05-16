@@ -160,7 +160,11 @@ export const tiledPlatformerNodes: Node[] = [
     parentId: "actor-1",
     position: { x: 4, y: 9999 },
     style: { width: 232 },
-    data: { max: 5, onZero: "kill", emitEvent: "" },
+    // `onZero: "emit"` instead of "kill" so the sceneSwitch-die modifier
+    // catches "player-died" and goes to the Game Over scene; the death
+    // animation pinning still runs because HitboxSystem pins it before
+    // dispatching the on-zero action.
+    data: { max: 5, onZero: "emit", emitEvent: "player-died" },
   },
   {
     id: "attackModifier-tp",
@@ -653,6 +657,276 @@ export const tiledPlatformerNodes: Node[] = [
       posY: 200,
     },
   },
+  // --- World tileset (shared with Tiled maps; also used for the door sprite). ---
+  {
+    id: "image-world",
+    type: "image",
+    position: { x: 40, y: 1600 },
+    data: { label: "World Tileset", src: "/sprites/world_tileset.png" },
+  },
+  {
+    id: "spritesheet-world",
+    type: "spritesheet",
+    position: { x: 280, y: 1600 },
+    data: {
+      label: "World Sheet",
+      columns: 16,
+      rows: 16,
+      frameWidth: 16,
+      frameHeight: 16,
+      margin: 0,
+      spacing: 0,
+    },
+  },
+  {
+    id: "animation-sign",
+    type: "animation",
+    position: { x: 520, y: 1600 },
+    // Frame 29 = row 1, col 13 of the world tileset — a wooden sign sprite.
+    // User can tweak in the node UI if a different tile reads better.
+    data: {
+      label: "Sign",
+      frames: [56],
+      frameDurationMs: 1000,
+      loop: false,
+    },
+  },
+  // --- Door actor: a static sign at the end of level 1 that switches scenes. ---
+  // Tagged "door" so scene.tsx's class-to-tag projection picks up the .tmj
+  // object of class="door" and turns this Actor into one instance per
+  // door. The collision rule fires switchScene when the player touches it.
+  {
+    id: "actor-door",
+    type: "actor",
+    position: { x: 760, y: 1600 },
+    style: { width: 240 },
+    data: {
+      label: "door",
+      pos: { x: 472, y: 360 },
+      color: "yellow",
+      collision: true,
+      tags: ["door"],
+      instances: [],
+    },
+  },
+  {
+    id: "animationModifier-door",
+    type: "animationModifier",
+    parentId: "actor-door",
+    position: { x: 4, y: 9999 },
+    style: { width: 232 },
+    data: {
+      states: {
+        idle: "animation-sign",
+        run: "animation-sign",
+        jump: "animation-sign",
+        fall: "animation-sign",
+      },
+      flipOnDirection: false,
+    },
+  },
+  // Player → door collision: switch to scene-2.
+  {
+    id: "collisionRuleModifier-door",
+    type: "collisionRuleModifier",
+    parentId: "actor-1",
+    position: { x: 4, y: 9999 },
+    style: { width: 232 },
+    data: {
+      target: "door",
+      action: "switchScene",
+      targetSceneId: "scene-2",
+      sceneSpawnX: 56,
+      sceneSpawnY: 360,
+    },
+  },
+  // --- Scene 2 + its Tiled map. ---
+  {
+    id: "scene-2",
+    type: "scene",
+    position: { x: 1240, y: 600 },
+    // Same camera defaults as scene-1 (1× zoom, centred on the map area)
+    // so the level renders at the same scale; the CameraFollow modifier
+    // on the player takes over once the player is added to this scene.
+    data: {
+      label: "Level 2",
+      backgroundColor: "#a8d8ea",
+      cameraX: 320,
+      cameraY: 240,
+      cameraZoom: 1,
+      showGrid: false,
+    },
+  },
+  {
+    id: "tiledMap-level2",
+    type: "tiledMap",
+    position: { x: 1240, y: 1000 },
+    data: {
+      label: "Level 2 Map",
+      src: "/maps/level-2.tmj",
+      spawnObjects: true,
+      posX: 0,
+      posY: 200,
+    },
+  },
+  // --- Game Over scene + restart wiring. ---
+  // Player's HealthComponent emits "player-died" on zero HP (see the
+  // healthModifier-tp update below). sceneSwitchModifier-die catches it
+  // and goes here. The restart modifier listens for KeyR but only fires
+  // when we're already on the Game Over scene.
+  {
+    id: "scene-game-over",
+    type: "scene",
+    position: { x: 1560, y: 600 },
+    data: {
+      label: "Game Over",
+      backgroundColor: "#1a1a26",
+      // Same viewport as the other scenes so the placeholder graphic
+      // group renders at the expected scale.
+      cameraX: 320,
+      cameraY: 240,
+      cameraZoom: 1,
+      showGrid: false,
+    },
+  },
+  // The Game Over screen is built from two entities so the user can drop
+  // / restyle them independently in the editor:
+  //   * `graphicGroup-gameover` — static "GAME OVER" title text + backdrop.
+  //   * `graphicGroup-restart-btn` — visual frame for the button.
+  //   * `actor-restart-btn` — the clickable hitbox. Tagged "restart-button"
+  //      with a ClickModifier that emits "restart-clicked", which the
+  //      sceneSwitchModifier-restart catches.
+  {
+    id: "graphicGroup-gameover",
+    type: "graphicGroup",
+    position: { x: 1560, y: 950 },
+    data: {
+      label: "Game Over Text",
+      groupX: 320,
+      groupY: 170,
+      collision: false,
+      physicsType: "passive",
+      invisible: false,
+      tags: [],
+      shapes: [
+        {
+          id: "go-bg",
+          kind: "rect",
+          x: 0,
+          y: 0,
+          w: 360,
+          h: 110,
+          color: "black",
+        },
+        {
+          id: "go-title",
+          kind: "text",
+          x: -110,
+          y: -28,
+          text: "GAME OVER",
+          size: 36,
+          color: "red",
+        },
+      ],
+    },
+  },
+  {
+    id: "actor-restart-btn",
+    type: "actor",
+    position: { x: 1860, y: 950 },
+    style: { width: 240 },
+    data: {
+      label: "Restart Button",
+      pos: { x: 320, y: 260 },
+      // Click hitbox matches the visual rect on the graphic group below.
+      width: 200,
+      height: 56,
+      // `collision: true` keeps the body Active so pointer-down hit
+      // testing finds the collider. `invisible: true` hides the actor's
+      // default yellow rect so the sibling graphic group is the only
+      // visible button surface.
+      color: "yellow",
+      collision: true,
+      invisible: true,
+      tags: ["restart-button"],
+      instances: [],
+    },
+  },
+  {
+    id: "graphicGroup-restart-btn-visual",
+    type: "graphicGroup",
+    position: { x: 1860, y: 1180 },
+    data: {
+      label: "Restart Button Skin",
+      groupX: 320,
+      groupY: 260,
+      collision: false,
+      physicsType: "passive",
+      invisible: false,
+      tags: [],
+      shapes: [
+        {
+          id: "rb-bg",
+          kind: "rect",
+          x: 0,
+          y: 0,
+          w: 200,
+          h: 56,
+          color: "white",
+        },
+        {
+          id: "rb-label",
+          kind: "text",
+          x: -56,
+          y: -12,
+          text: "RESTART",
+          size: 22,
+          color: "black",
+        },
+      ],
+    },
+  },
+  {
+    id: "clickModifier-restart-btn",
+    type: "clickModifier",
+    parentId: "actor-restart-btn",
+    position: { x: 4, y: 9999 },
+    style: { width: 232 },
+    data: {
+      eventName: "restart-clicked",
+      hoverCursor: true,
+    },
+  },
+  {
+    id: "sceneSwitchModifier-die",
+    type: "sceneSwitchModifier",
+    parentId: "actor-1",
+    position: { x: 4, y: 9999 },
+    style: { width: 232 },
+    data: {
+      eventName: "player-died",
+      keyCode: "",
+      targetSceneId: "scene-game-over",
+      onlyInScene: "",
+      alsoReset: false,
+    },
+  },
+  {
+    id: "sceneSwitchModifier-restart",
+    type: "sceneSwitchModifier",
+    parentId: "actor-1",
+    position: { x: 4, y: 9999 },
+    style: { width: 232 },
+    data: {
+      eventName: "restart-clicked",
+      keyCode: "",
+      targetSceneId: "scene-1",
+      // Only fires while game-over is the active scene so a stray click
+      // mid-game can't accidentally restart.
+      onlyInScene: "scene-game-over",
+      alsoReset: true,
+    },
+  },
 ];
 
 export const tiledPlatformerEdges = [
@@ -722,4 +996,30 @@ export const tiledPlatformerEdges = [
   { id: "e-tp-slime-s1", source: "actor-slime", target: "scene-1" },
   // Counter overlay attaches to the Game node.
   { id: "e-tp-counter-g1", source: "counter-coins", target: "game-1" },
+  // World tileset chain — feeds the sign-frame Animation used by the Door.
+  { id: "e-tp-world-img-sheet", source: "image-world", target: "spritesheet-world" },
+  {
+    id: "e-tp-world-sheet-sign",
+    source: "spritesheet-world",
+    target: "animation-sign",
+  },
+  // Door Actor lives in scene-1 (the .tmj projects every class="door"
+  // object as an instance there). When the user crosses the door, the
+  // player's collisionRuleModifier-door fires switchScene → scene-2.
+  { id: "e-tp-door-s1", source: "actor-door", target: "scene-1" },
+  // Level 2 wiring — the same Actors (player, slime, coin, door) live
+  // in this scene too because the .tmj also has class="player",
+  // class="slime", class="coin", class="door" objects. The class →
+  // tag matcher means we don't need separate Actor nodes per level.
+  { id: "e-tp-tiled-s2", source: "tiledMap-level2", target: "scene-2" },
+  { id: "e-tp-a1-s2", source: "actor-1", target: "scene-2" },
+  { id: "e-tp-coin-s2", source: "actor-coin", target: "scene-2" },
+  { id: "e-tp-slime-s2", source: "actor-slime", target: "scene-2" },
+  { id: "e-tp-door-s2", source: "actor-door", target: "scene-2" },
+  { id: "e-tp-s2-g1", source: "scene-2", target: "game-1" },
+  // Game Over scene: title text + clickable Restart button entity.
+  { id: "e-tp-go-graphics", source: "graphicGroup-gameover", target: "scene-game-over" },
+  { id: "e-tp-go-btn-visual", source: "graphicGroup-restart-btn-visual", target: "scene-game-over" },
+  { id: "e-tp-go-btn-actor", source: "actor-restart-btn", target: "scene-game-over" },
+  { id: "e-tp-go-g1", source: "scene-game-over", target: "game-1" },
 ];

@@ -14,6 +14,7 @@ import {
   NodeHeader,
 } from "../../ui";
 import { registerImage, unregisterImage } from "../modifiers/shared";
+import { assetUrl } from "../../url";
 
 // Image asset node. Constructs an ex.ImageSource, registers it by node id
 // so Sprite / Spritesheet consumers can look it up. Loads the image into a
@@ -36,7 +37,7 @@ export default function ImageNode({ id, data }: NodeProps) {
       setLoaded(false);
       return;
     }
-    const image = new ImageSource(import.meta.env.BASE_URL + trimmed);
+    const image = new ImageSource(assetUrl(trimmed));
     registerImage(id, image);
     let cancelled = false;
     image
@@ -100,7 +101,7 @@ export default function ImageNode({ id, data }: NodeProps) {
           >
             <img
               ref={imgRef}
-              src={import.meta.env.BASE_URL + src}
+              src={assetUrl(src)}
               alt={(data.label as string) ?? "image"}
               style={{
                 maxWidth: 200,

@@ -13,6 +13,7 @@ import {
   setSoundBaseVolume,
   unregisterSound,
 } from "../modifiers/shared";
+import { assetUrl } from "../../url";
 
 // Sound asset node. Builds an ex.Sound by src, registers by node id, and
 // gives the user a play/stop button + volume slider for quick auditioning
@@ -40,7 +41,7 @@ export default function SoundNode({ id, data }: NodeProps) {
       soundRef.current = undefined;
       return;
     }
-    const snd = new Sound(import.meta.env.BASE_URL + trimmed);
+    const snd = new Sound(assetUrl(trimmed));
     snd.loop = loop;
     snd.volume = volume;
     registerSound(id, snd);

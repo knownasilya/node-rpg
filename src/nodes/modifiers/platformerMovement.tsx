@@ -1,6 +1,6 @@
 import { NodeProps } from "@xyflow/react";
 import { useEffect, useState } from "preact/hooks";
-import { Field } from "../../ui";
+import { Field, ModShell } from "../../ui";
 import {
   PlatformerControllerComponent,
   RequestedHeadingComponent,
@@ -8,6 +8,7 @@ import {
 import { useParentActor } from "./shared";
 
 export default function PlatformerMovementModifier({
+  id,
   data,
   parentId,
 }: NodeProps) {
@@ -54,19 +55,13 @@ export default function PlatformerMovementModifier({
   }, [actor, maxSpeed, accel, friction, airControl]);
 
   return (
-    <div
-      className="nrpg-mod"
-      style={{ ["--accent" as any]: "var(--accent-movement)" }}
+    <ModShell
+      id={id}
+      data={data}
+      accent="var(--accent-movement)"
+      title="Platformer"
+      summary={`max ${maxSpeed} • a ${accel}`}
     >
-      <div className="nrpg-mod-accent" />
-      <div className="nrpg-mod-header">
-        <span
-          className="nrpg-header-dot"
-          style={{ background: "var(--accent-movement)" }}
-        />
-        Platformer
-      </div>
-      <div className="nrpg-mod-body nodrag">
         <Field label="max speed">
           <input
             type="number"
@@ -100,7 +95,6 @@ export default function PlatformerMovementModifier({
             onChange={(e) => setAirControl(+e.currentTarget.value)}
           />
         </Field>
-      </div>
-    </div>
+    </ModShell>
   );
 }

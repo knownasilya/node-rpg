@@ -1,7 +1,7 @@
 import { NodeProps, useNodes, useReactFlow } from "@xyflow/react";
 import { Actor, vec } from "excalibur";
 import { useEffect, useState } from "preact/hooks";
-import { Field } from "../../ui";
+import { Field, ModShell } from "../../ui";
 import {
   CollisionAction,
   CollisionRulesComponent,
@@ -188,19 +188,13 @@ export default function CollisionRuleModifier({
   const isSwitchScene = action === "switchScene";
 
   return (
-    <div
-      className="nrpg-mod"
-      style={{ ["--accent" as any]: "var(--accent-collision)" }}
+    <ModShell
+      id={ruleNodeId}
+      data={data}
+      accent="var(--accent-collision)"
+      title="Collide"
+      summary={`when ${target || "?"} → ${action}`}
     >
-      <div className="nrpg-mod-accent" />
-      <div className="nrpg-mod-header">
-        <span
-          className="nrpg-header-dot"
-          style={{ background: "var(--accent-collision)" }}
-        />
-        Collide
-      </div>
-      <div className="nrpg-mod-body nodrag">
         <Field label="when tag">
           <input
             type="text"
@@ -358,7 +352,6 @@ export default function CollisionRuleModifier({
         >
           {ACTION_DESCRIPTIONS[action]}
         </div>
-      </div>
-    </div>
+    </ModShell>
   );
 }

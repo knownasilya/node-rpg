@@ -1,12 +1,12 @@
 import { NodeProps } from "@xyflow/react";
 import { Keys } from "excalibur";
 import { useEffect, useState } from "preact/hooks";
-import { Field } from "../../ui";
+import { Field, ModShell, TagsField } from "../../ui";
 import {
   HitboxComponent,
   type BoxShape,
 } from "./ecs";
-import { emit, parseTags, tagsToString, useParentActors } from "./shared";
+import { emit, useParentActors } from "./shared";
 import { PlayerAnimationStateComponent as AnimationComponent } from "./animation";
 
 // AttackModifier: presses an "attack" key to activate the actor's
@@ -24,7 +24,7 @@ const KEY_OPTIONS: { label: string; value: Keys }[] = [
   { label: "Enter", value: Keys.Enter },
 ];
 
-export default function AttackModifier({ data, parentId }: NodeProps) {
+export default function AttackModifier({ id, data, parentId }: NodeProps) {
   const actors = useParentActors(parentId);
   const actorsKey = actors.map((a) => a.id).join(",");
   const [attackKey, setAttackKey] = useState<Keys>(
@@ -42,16 +42,16 @@ export default function AttackModifier({ data, parentId }: NodeProps) {
   const [boxHeight, setBoxHeight] = useState<number>(
     (data.boxHeight as number | undefined) ?? 16,
   );
-  const [targetTagsText, setTargetTagsText] = useState<string>(
-    tagsToString((data.targetTags as string[] | undefined) ?? ["enemy"]),
+  const [targetTags, setTargetTags] = useState<string[]>(
+    (data.targetTags as string[] | undefined) ?? ["enemy"],
   );
+  const targetTagsKey = targetTags.join(",");
   const [emitEvent, setEmitEvent] = useState<string>(
     (data.emitEvent as string | undefined) ?? "player-attacked",
   );
 
   useEffect(() => {
     if (actors.length === 0) return;
-    const targetTags = parseTags(targetTagsText);
 
     // Each actor needs its own HitboxComponent (kept inactive between
     // attacks). Keep a per-actor record of the active swing's timer so
@@ -115,24 +115,18 @@ export default function AttackModifier({ data, parentId }: NodeProps) {
     damage,
     reach,
     boxHeight,
-    targetTagsText,
+    targetTagsKey,
     emitEvent,
   ]);
 
   return (
-    <div
-      className="nrpg-mod"
-      style={{ ["--accent" as any]: "var(--accent-collision)" }}
+    <ModShell
+      id={id}
+      data={data}
+      accent="var(--accent-collision)"
+      title="Attack"
+      summary={`${String(attackKey).replace(/^Key/, "")} → ${damage} dmg`}
     >
-      <div className="nrpg-mod-accent" />
-      <div className="nrpg-mod-header">
-        <span
-          className="nrpg-header-dot"
-          style={{ background: "var(--accent-collision)" }}
-        />
-        Attack
-      </div>
-      <div className="nrpg-mod-body nodrag">
         <Field label="key">
           <select
             className="nrpg-select"
@@ -183,13 +177,11 @@ export default function AttackModifier({ data, parentId }: NodeProps) {
           />
         </Field>
         <Field label="target tags">
-          <input
-            type="text"
-            className="nrpg-input"
-            style={{ width: 120, textAlign: "left" }}
-            value={targetTagsText}
+          <TagsField
+            value={targetTags}
+            onChange={setTargetTags}
+            width={120}
             placeholder="enemy"
-            onChange={(e) => setTargetTagsText(e.currentTarget.value)}
           />
         </Field>
         <Field label="emit event">
@@ -202,7 +194,6 @@ export default function AttackModifier({ data, parentId }: NodeProps) {
             onChange={(e) => setEmitEvent(e.currentTarget.value)}
           />
         </Field>
-      </div>
-    </div>
+    </ModShell>
   );
 }

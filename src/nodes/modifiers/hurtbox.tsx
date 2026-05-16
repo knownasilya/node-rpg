@@ -1,26 +1,27 @@
 import { NodeProps } from "@xyflow/react";
 import { useEffect, useState } from "preact/hooks";
-import { Button, Field } from "../../ui";
+import { Button, Field, ModShell, TagsField } from "../../ui";
 import {
   type BoxShape,
   HealthComponent,
   HurtboxComponent,
 } from "./ecs";
-import { parseTags, tagsToString, useParentActors } from "./shared";
+import { useParentActors } from "./shared";
 
 function defaultBox(): BoxShape {
   return { x: -10, y: -10, w: 20, h: 20 };
 }
 
-export default function HurtboxModifier({ data, parentId }: NodeProps) {
+export default function HurtboxModifier({ id, data, parentId }: NodeProps) {
   const actors = useParentActors(parentId);
   const actorsKey = actors.map((a) => a.id).join(",");
   const [shapes, setShapes] = useState<BoxShape[]>(
     (data.shapes as BoxShape[] | undefined) ?? [defaultBox()],
   );
-  const [tagsText, setTagsText] = useState<string>(
-    tagsToString((data.tags as string[] | undefined) ?? ["player"]),
+  const [tags, setTags] = useState<string[]>(
+    (data.tags as string[] | undefined) ?? ["player"],
   );
+  const tagsKey = tags.join(",");
   const [iFrameMs, setIFrameMs] = useState<number>(
     (data.iFrameMs as number | undefined) ?? 300,
   );
@@ -29,7 +30,6 @@ export default function HurtboxModifier({ data, parentId }: NodeProps) {
 
   useEffect(() => {
     if (actors.length === 0) return;
-    const tags = parseTags(tagsText);
     for (const actor of actors) {
       const existing = actor.get(HurtboxComponent);
       if (existing) {
@@ -50,7 +50,7 @@ export default function HurtboxModifier({ data, parentId }: NodeProps) {
         }
       }
     };
-  }, [actorsKey, shapesKey, tagsText, iFrameMs]);
+  }, [actorsKey, shapesKey, tagsKey, iFrameMs]);
 
   const updateShape = (i: number, patch: Partial<BoxShape>) =>
     setShapes((arr) => arr.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
@@ -58,28 +58,15 @@ export default function HurtboxModifier({ data, parentId }: NodeProps) {
     setShapes((arr) => arr.filter((_, idx) => idx !== i));
 
   return (
-    <div
-      className="nrpg-mod"
-      style={{ ["--accent" as any]: "var(--accent-collision)" }}
+    <ModShell
+      id={id}
+      data={data}
+      accent="var(--accent-collision)"
+      title="Hurtbox"
+      summary={`${tags.join(",") || "?"} • ${iFrameMs}ms`}
     >
-      <div className="nrpg-mod-accent" />
-      <div className="nrpg-mod-header">
-        <span
-          className="nrpg-header-dot"
-          style={{ background: "var(--accent-collision)" }}
-        />
-        Hurtbox
-      </div>
-      <div className="nrpg-mod-body nodrag">
         <Field label="tags">
-          <input
-            type="text"
-            className="nrpg-input"
-            style={{ width: 120, textAlign: "left" }}
-            value={tagsText}
-            placeholder="player"
-            onChange={(e) => setTagsText(e.currentTarget.value)}
-          />
+          <TagsField value={tags} onChange={setTags} width={120} placeholder="player" />
         </Field>
         <Field label="i-frames (ms)">
           <input
@@ -140,7 +127,6 @@ export default function HurtboxModifier({ data, parentId }: NodeProps) {
         <Button onClick={() => setShapes((s) => [...s, defaultBox()])}>
           + box
         </Button>
-      </div>
-    </div>
+    </ModShell>
   );
 }

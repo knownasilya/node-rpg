@@ -1,14 +1,14 @@
 import { NodeProps } from "@xyflow/react";
 import { useEffect, useState } from "preact/hooks";
-import { Button, Field, Toggle } from "../../ui";
+import { Button, Field, ModShell, TagsField, Toggle } from "../../ui";
 import { type BoxShape, HitboxComponent } from "./ecs";
-import { parseTags, tagsToString, useParentActors } from "./shared";
+import { useParentActors } from "./shared";
 
 function defaultBox(): BoxShape {
   return { x: -8, y: -8, w: 16, h: 16 };
 }
 
-export default function HitboxModifier({ data, parentId }: NodeProps) {
+export default function HitboxModifier({ id, data, parentId }: NodeProps) {
   const actors = useParentActors(parentId);
   const actorsKey = actors.map((a) => a.id).join(",");
   const [shapes, setShapes] = useState<BoxShape[]>(
@@ -17,19 +17,18 @@ export default function HitboxModifier({ data, parentId }: NodeProps) {
   const [damage, setDamage] = useState<number>(
     (data.damage as number | undefined) ?? 1,
   );
-  const [targetTagsText, setTargetTagsText] = useState<string>(
-    tagsToString((data.targetTags as string[] | undefined) ?? ["enemy"]),
+  const [targetTags, setTargetTags] = useState<string[]>(
+    (data.targetTags as string[] | undefined) ?? ["enemy"],
   );
   const [active, setActive] = useState<boolean>(
     (data.active as boolean | undefined) ?? true,
   );
 
   const shapesKey = JSON.stringify(shapes);
-  const tagsKey = targetTagsText;
+  const tagsKey = targetTags.join(",");
 
   useEffect(() => {
     if (actors.length === 0) return;
-    const targetTags = parseTags(targetTagsText);
     for (const actor of actors) {
       const existing = actor.get(HitboxComponent);
       if (existing) {
@@ -58,19 +57,13 @@ export default function HitboxModifier({ data, parentId }: NodeProps) {
     setShapes((arr) => arr.filter((_, idx) => idx !== i));
 
   return (
-    <div
-      className="nrpg-mod"
-      style={{ ["--accent" as any]: "var(--accent-collision)" }}
+    <ModShell
+      id={id}
+      data={data}
+      accent="var(--accent-collision)"
+      title="Hitbox"
+      summary={`${active ? "on" : "off"} • ${damage} dmg → ${targetTags.join(",") || "?"}`}
     >
-      <div className="nrpg-mod-accent" />
-      <div className="nrpg-mod-header">
-        <span
-          className="nrpg-header-dot"
-          style={{ background: "var(--accent-collision)" }}
-        />
-        Hitbox
-      </div>
-      <div className="nrpg-mod-body nodrag">
         <Toggle label="active" checked={active} onChange={setActive} />
         <Field label="damage">
           <input
@@ -82,13 +75,11 @@ export default function HitboxModifier({ data, parentId }: NodeProps) {
           />
         </Field>
         <Field label="target tags">
-          <input
-            type="text"
-            className="nrpg-input"
-            style={{ width: 120, textAlign: "left" }}
-            value={targetTagsText}
-            placeholder="enemy, hazard"
-            onChange={(e) => setTargetTagsText(e.currentTarget.value)}
+          <TagsField
+            value={targetTags}
+            onChange={setTargetTags}
+            width={120}
+            placeholder="enemy"
           />
         </Field>
         <div style={{ fontSize: 10, color: "var(--text-subtle)" }}>
@@ -141,7 +132,6 @@ export default function HitboxModifier({ data, parentId }: NodeProps) {
         <Button onClick={() => setShapes((s) => [...s, defaultBox()])}>
           + box
         </Button>
-      </div>
-    </div>
+    </ModShell>
   );
 }

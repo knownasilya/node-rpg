@@ -1,4 +1,5 @@
-import { Handle, Position, useEdges, useNodes } from "@xyflow/react";
+import { useEdges, useNodes, useReactFlow } from "@xyflow/react";
+import { useState } from "preact/hooks";
 
 // Children typed as `any` to bridge the Preact-vs-React-types mismatch in this project.
 type Children = any;
@@ -177,6 +178,220 @@ export function Swatch({ color }: { color: string }) {
   return <span className="nrpg-swatch" style={{ background: color }} />;
 }
 
+// Outer wrapper used by every modifier card. Renders the accent strip,
+// header (title + chevron toggle + summary chip when collapsed), and a
+// hidden body when collapsed. `collapsed` state is persisted on the
+// modifier node's data under `_collapsed` so reloads remember the state.
+export function ModShell({
+  id,
+  accent,
+  title,
+  summary,
+  children,
+  defaultCollapsed,
+  data,
+}: {
+  id: string;
+  accent: string; // CSS color expression, e.g. "var(--accent-collision)"
+  title: string;
+  summary?: Children;
+  children: Children;
+  defaultCollapsed?: boolean;
+  // The modifier node's data object — read `_collapsed` from here so the
+  // initial state matches the persisted value without a flash.
+  data?: Record<string, unknown>;
+}) {
+  const reactFlow = useReactFlow();
+  const initial =
+    typeof data?._collapsed === "boolean"
+      ? (data?._collapsed as boolean)
+      : (defaultCollapsed ?? true);
+  const [collapsed, setCollapsed] = useState<boolean>(initial);
+  const toggle = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    reactFlow.updateNodeData(id, { _collapsed: next });
+  };
+  return (
+    <div className="nrpg-mod" style={{ ["--accent" as any]: accent }}>
+      <div className="nrpg-mod-accent" />
+      <div
+        className="nrpg-mod-header"
+        onClick={toggle}
+        style={{
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+        }}
+        title={collapsed ? "Click to expand" : "Click to collapse"}
+      >
+        <span
+          className="nrpg-header-dot"
+          // Diamond marker (vs. the round dot on top-level nodes) so it's
+          // visually obvious a modifier card lives nested inside an Actor.
+          style={{
+            background: accent,
+            transform: "rotate(45deg)",
+            borderRadius: 2,
+          }}
+        />
+        <span style={{ flex: "0 0 auto" }}>{title}</span>
+        {collapsed && summary !== undefined && summary !== "" && (
+          <span
+            style={{
+              marginLeft: "auto",
+              fontSize: 10,
+              color: "var(--text-subtle)",
+              fontFamily: "ui-monospace, monospace",
+              padding: "1px 6px",
+              borderRadius: 8,
+              background: "var(--bg-subtle)",
+              border: "1px solid var(--border)",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              maxWidth: 160,
+            }}
+          >
+            {summary}
+          </span>
+        )}
+        <span
+          style={{
+            marginLeft: collapsed && summary ? 4 : "auto",
+            fontSize: 10,
+            color: "var(--text-subtle)",
+            opacity: 0.8,
+          }}
+        >
+          {collapsed ? "▸" : "▾"}
+        </span>
+      </div>
+      {!collapsed && <div className="nrpg-mod-body nodrag">{children}</div>}
+    </div>
+  );
+}
+
+// Pill-based tag editor — each tag is a chip with a tiny remove button,
+// and the user types into the trailing input + presses Enter (or comma
+// / space) to add a new one. Backspace on the empty input drops the
+// last tag. Designed to be a drop-in replacement for the
+// `parseTags/tagsToString` text inputs scattered through the
+// modifiers, so the wire-format stays `string[]` and consumers don't
+// need to change.
+export function TagsField({
+  value,
+  onChange,
+  placeholder,
+  width,
+}: {
+  value: string[];
+  onChange: (next: string[]) => void;
+  placeholder?: string;
+  width?: number | string;
+}) {
+  const [draft, setDraft] = useState("");
+  const commit = (raw: string) => {
+    const t = raw.trim().replace(/[,\s]+/g, "");
+    if (!t) return;
+    if (value.includes(t)) {
+      setDraft("");
+      return;
+    }
+    onChange([...value, t]);
+    setDraft("");
+  };
+  const remove = (i: number) => {
+    const next = value.filter((_, idx) => idx !== i);
+    onChange(next);
+  };
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 3,
+        alignItems: "center",
+        padding: "2px 4px",
+        background: "var(--bg)",
+        border: "1px solid var(--border-strong)",
+        borderRadius: "var(--radius-sm, 4px)",
+        minHeight: 22,
+        boxSizing: "border-box",
+        width: width ?? 140,
+      }}
+    >
+      {value.map((t, i) => (
+        <span
+          key={`${t}-${i}`}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 3,
+            padding: "1px 4px 1px 6px",
+            borderRadius: 8,
+            background: "var(--bg-subtle)",
+            border: "1px solid var(--border)",
+            fontSize: 10,
+            color: "var(--text-strong)",
+            lineHeight: 1.2,
+          }}
+        >
+          {t}
+          <button
+            type="button"
+            onClick={() => remove(i)}
+            title={`Remove ${t}`}
+            style={{
+              all: "unset",
+              cursor: "pointer",
+              color: "var(--text-subtle)",
+              padding: "0 2px",
+              borderRadius: 4,
+              fontSize: 9,
+            }}
+          >
+            ✕
+          </button>
+        </span>
+      ))}
+      <input
+        type="text"
+        value={draft}
+        placeholder={value.length === 0 ? (placeholder ?? "tag…") : ""}
+        onChange={(e) => {
+          const v = e.currentTarget.value;
+          if (v.endsWith(",") || v.endsWith(" ")) {
+            commit(v);
+          } else {
+            setDraft(v);
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit(draft);
+          } else if (e.key === "Backspace" && draft === "" && value.length > 0) {
+            remove(value.length - 1);
+          }
+        }}
+        onBlur={() => {
+          if (draft.trim()) commit(draft);
+        }}
+        style={{
+          all: "unset",
+          flex: 1,
+          minWidth: 36,
+          padding: "1px 4px",
+          fontSize: 11,
+          color: "var(--text-strong)",
+        }}
+      />
+    </div>
+  );
+}
+
 // A "Connections" section rendered between the NodeHeader and the
 // NodeBody. Each declared input/output renders one React Flow Handle
 // *inside* the row (rather than the default centered handle on the
@@ -200,21 +415,28 @@ export function NodeConnections({
     const n = nodes.find((nn) => nn.id === id);
     return ((n?.data as any)?.label as string | undefined) ?? id;
   };
-  const rowStyle: Record<string, any> = {
-    position: "relative",
-    padding: "4px 0 4px 0",
-  };
-  const handleStyle = (side: "left" | "right"): Record<string, any> => ({
-    position: "absolute",
-    [side]: -6,
-    top: "50%",
-    width: 8,
-    height: 8,
-    transform: "translateY(-50%)",
-    background: "var(--accent, var(--accent-scene))",
-    border: "1px solid var(--bg)",
-    borderRadius: "50%",
-  });
+  const rowStyle: Record<string, any> = { padding: "2px 0" };
+  // Edges actually terminate at the card-edge default Handle; rendering
+  // a second labeled Handle inside this section made it look like the
+  // labels were the endpoints when they weren't. This section is now
+  // purely informational: lists each declared input/output type and the
+  // labels of any nodes currently wired through.
+  const inboundFor = (t: string) =>
+    edges.filter(
+      (e) =>
+        e.target === nodeId &&
+        // Match either a typed handle (`in:Image`) or untyped edges that
+        // hit the default handle — both should show under the right row.
+        (e.targetHandle === `in:${t}` ||
+          (!e.targetHandle && inputs.indexOf(t) === 0)),
+    );
+  const outboundFor = (t: string) =>
+    edges.filter(
+      (e) =>
+        e.source === nodeId &&
+        (e.sourceHandle === `out:${t}` ||
+          (!e.sourceHandle && outputs.indexOf(t) === 0)),
+    );
   return (
     <div
       style={{
@@ -240,60 +462,36 @@ export function NodeConnections({
         Connections
       </div>
       {inputs.map((t) => {
-        const matches = edges.filter(
-          (e) => e.target === nodeId && (e.targetHandle ?? "") === `in:${t}`,
-        );
+        const matches = inboundFor(t);
         return (
           <div key={`in-${t}`} style={rowStyle}>
-            <Handle
-              type="target"
-              position={Position.Left}
-              id={`in:${t}`}
-              style={handleStyle("left")}
-            />
             <div>
               ← <span style={{ color: "var(--text-strong)" }}>{t}</span>
+              {matches.length > 0 && (
+                <span
+                  style={{ marginLeft: 6, color: "var(--text-subtle)" }}
+                >
+                  {matches.map((m) => labelFor(m.source)).join(", ")}
+                </span>
+              )}
             </div>
-            {matches.length > 0 && (
-              <div
-                style={{
-                  paddingLeft: 12,
-                  fontSize: 9,
-                  color: "var(--text-subtle)",
-                }}
-              >
-                {matches.map((m) => labelFor(m.source)).join(", ")}
-              </div>
-            )}
           </div>
         );
       })}
       {outputs.map((t) => {
-        const matches = edges.filter(
-          (e) => e.source === nodeId && (e.sourceHandle ?? "") === `out:${t}`,
-        );
+        const matches = outboundFor(t);
         return (
           <div key={`out-${t}`} style={rowStyle}>
-            <Handle
-              type="source"
-              position={Position.Right}
-              id={`out:${t}`}
-              style={handleStyle("right")}
-            />
             <div>
               → <span style={{ color: "var(--text-strong)" }}>{t}</span>
+              {matches.length > 0 && (
+                <span
+                  style={{ marginLeft: 6, color: "var(--text-subtle)" }}
+                >
+                  {matches.map((m) => labelFor(m.target)).join(", ")}
+                </span>
+              )}
             </div>
-            {matches.length > 0 && (
-              <div
-                style={{
-                  paddingLeft: 12,
-                  fontSize: 9,
-                  color: "var(--text-subtle)",
-                }}
-              >
-                {matches.map((m) => labelFor(m.target)).join(", ")}
-              </div>
-            )}
           </div>
         );
       })}

@@ -1,6 +1,6 @@
 import { NodeProps } from "@xyflow/react";
 import { useEffect, useState } from "preact/hooks";
-import { Field } from "../../ui";
+import { Field, ModShell } from "../../ui";
 import {
   MovementComponent,
   MovementStyle,
@@ -14,7 +14,7 @@ const STYLES: MovementStyle[] = [
   "continuous-heading",
 ];
 
-export default function MovementModifier({ data, parentId }: NodeProps) {
+export default function MovementModifier({ id, data, parentId }: NodeProps) {
   const actor = useParentActor(parentId);
   const [style, setStyle] = useState<MovementStyle>(
     (data.style as MovementStyle | undefined) ?? "velocity",
@@ -64,19 +64,13 @@ export default function MovementModifier({ data, parentId }: NodeProps) {
   const showCell = style === "grid-step";
 
   return (
-    <div
-      className="nrpg-mod"
-      style={{ ["--accent" as any]: "var(--accent-movement)" }}
+    <ModShell
+      id={id}
+      data={data}
+      accent="var(--accent-movement)"
+      title="Movement"
+      summary={`${style} @ ${speed}`}
     >
-      <div className="nrpg-mod-accent" />
-      <div className="nrpg-mod-header">
-        <span
-          className="nrpg-header-dot"
-          style={{ background: "var(--accent-movement)" }}
-        />
-        Movement
-      </div>
-      <div className="nrpg-mod-body nodrag">
         <Field label="style">
           <select
             className="nrpg-select"
@@ -120,7 +114,6 @@ export default function MovementModifier({ data, parentId }: NodeProps) {
             />
           </Field>
         )}
-      </div>
-    </div>
+    </ModShell>
   );
 }
