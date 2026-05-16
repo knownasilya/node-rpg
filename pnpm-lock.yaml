@@ -18,8 +18,8 @@ importers:
         specifier: ^12.3.6
         version: 12.3.6(@types/react@18.3.12)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       excalibur:
-        specifier: ^0.30.1
-        version: 0.30.1
+        specifier: ^0.32.0
+        version: 0.32.0
       preact:
         specifier: ^10.25.4
         version: 10.25.4
@@ -679,8 +679,8 @@ packages:
   estree-walker@2.0.2:
     resolution: {integrity: sha512-Rfkk/Mp/DL7JVje3u18FxFujQlTNR2q6QfMSMB7AvCBx91NGj/ba3kCfza0f6dVDbw7YlRf/nDrn7pQrCCyQ/w==}
 
-  excalibur@0.30.1:
-    resolution: {integrity: sha512-M/dvK74jZGNcb54rBWnIBDxuVCjOMlzgUfeVjvMz/iHP7q/OAKdimle0metUJ2BnyupG2ASR5lGtndGTOSSjjw==}
+  excalibur@0.32.0:
+    resolution: {integrity: sha512-anCvsZK2Dh3BTlw/ERHr3fvfqF2vdJHw88soCs3r6EIwxbhibNRILMZw3Ae6GMTY8FkzRfkGLyk7DlEZVesUaw==}
 
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
@@ -1470,7 +1470,7 @@ snapshots:
 
   estree-walker@2.0.2: {}
 
-  excalibur@0.30.1: {}
+  excalibur@0.32.0: {}
 
   fsevents@2.3.3:
     optional: true
