@@ -2,6 +2,7 @@ import { NodeProps } from "@xyflow/react";
 import { useEffect, useState } from "preact/hooks";
 import { Field, ModShell } from "../../ui";
 import {
+  type AxisLock,
   MovementComponent,
   MovementStyle,
   RequestedHeadingComponent,
@@ -32,6 +33,9 @@ export default function MovementModifier({ id, data, parentId }: NodeProps) {
   const [cellSize, setCellSize] = useState<number>(
     (data.cellSize as number | undefined) ?? 20,
   );
+  const [axisLock, setAxisLock] = useState<AxisLock>(
+    (data.axisLock as AxisLock | undefined) ?? "none",
+  );
 
   useEffect(() => {
     if (actors.length === 0) return;
@@ -47,11 +51,14 @@ export default function MovementModifier({ id, data, parentId }: NodeProps) {
         existing.speed = speed;
         existing.tickMs = tickMs;
         existing.cellSize = cellSize;
+        existing.axisLock = axisLock;
         existing.accumulator = 0;
         existing.latchedHeading.x = 0;
         existing.latchedHeading.y = 0;
       } else {
-        actor.addComponent(new MovementComponent(style, speed, tickMs, cellSize));
+        actor.addComponent(
+          new MovementComponent(style, speed, tickMs, cellSize, axisLock),
+        );
       }
     }
     return () => {
@@ -59,7 +66,7 @@ export default function MovementModifier({ id, data, parentId }: NodeProps) {
         if (actor.get(MovementComponent)) actor.removeComponent(MovementComponent);
       }
     };
-  }, [actorsKey, style, speed, tickMs, cellSize]);
+  }, [actorsKey, style, speed, tickMs, cellSize, axisLock]);
 
   const showTick = style !== "velocity";
   const showCell = style === "grid-step";
@@ -115,6 +122,17 @@ export default function MovementModifier({ id, data, parentId }: NodeProps) {
             />
           </Field>
         )}
+        <Field label="axis lock">
+          <select
+            className="nrpg-select"
+            value={axisLock}
+            onChange={(e) => setAxisLock(e.currentTarget.value as AxisLock)}
+          >
+            <option value="none">none</option>
+            <option value="x">x only</option>
+            <option value="y">y only</option>
+          </select>
+        </Field>
     </ModShell>
   );
 }

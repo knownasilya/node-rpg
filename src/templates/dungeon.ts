@@ -595,6 +595,11 @@ export const dungeonNodes: Node[] = [
       pauseAtTurnMs: 250,
       stayOnPlatform: false,
       axis: "vertical",
+      // Break off patrol and pursue the player only when it enters the
+      // forward vision cone (the way the skeleton is walking).
+      chaseTag: "player",
+      sightRange: 90,
+      sightAngle: 110,
     },
   },
   {

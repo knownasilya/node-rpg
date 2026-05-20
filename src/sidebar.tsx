@@ -15,6 +15,10 @@ const LAYOUT_COLUMNS: string[] = [
   "tiledMap",
   "parallaxLayer",
   "scene",
+  "counter",
+  "stateMachine",
+  "toolbar",
+  "waveSpawner",
   "game",
 ];
 const X_START = 80;
@@ -104,6 +108,27 @@ export const NODE_KINDS: ItemDef[] = [
     accent: "game",
     description:
       "Listens for an event and shows a count over the game canvas.",
+  },
+  {
+    kind: "stateMachine",
+    label: "State Machine",
+    accent: "game",
+    description:
+      "General FSM: named states + from→to transitions fired by event/key/timer; emits on enter/transition.",
+  },
+  {
+    kind: "toolbar",
+    label: "Toolbar",
+    accent: "game",
+    description:
+      "On-screen button bar (play mode). Items emit events or click-to-place actors; optional points economy.",
+  },
+  {
+    kind: "waveSpawner",
+    label: "Wave Spawner",
+    accent: "entity",
+    description:
+      "Spawn N escalating waves of path-following creeps (more/faster/tougher each wave); emits wave/level-cleared.",
   },
 ];
 
@@ -222,6 +247,30 @@ export const MODIFIER_KINDS: ItemDef[] = [
     label: "Directional Anim",
     accent: "entity",
     description: "Top-down 4-way facing: idle/walk/attack per direction.",
+  },
+  {
+    kind: "ballModifier",
+    label: "Ball",
+    accent: "movement",
+    description: "Pong ball: reflect off paddles/walls, score + reset on goals.",
+  },
+  {
+    kind: "pathFollowModifier",
+    label: "Path Follow",
+    accent: "movement",
+    description: "Walk waypoints (TD creep); waves via per-instance stagger.",
+  },
+  {
+    kind: "towerModifier",
+    label: "Tower",
+    accent: "collision",
+    description: "Shoot the nearest tagged enemy in range on a cooldown.",
+  },
+  {
+    kind: "healthSpriteModifier",
+    label: "Health Sprite",
+    accent: "entity",
+    description: "Swap sprite good/damaged/broken by health fraction.",
   },
   {
     kind: "sceneSwitchModifier",

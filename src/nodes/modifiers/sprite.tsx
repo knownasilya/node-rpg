@@ -5,7 +5,7 @@ import {
   getImage,
   getSpritesheet,
   useAssetVersion,
-  useParentActor,
+  useParentActors,
 } from "./shared";
 
 // Static sprite: swap the actor's default graphic for a Sprite drawn from
@@ -14,7 +14,10 @@ import {
 // editor-state, not gameplay-state.
 
 export default function SpriteModifier({ id, data, parentId }: NodeProps) {
-  const actor = useParentActor(parentId);
+  // Plural so every templated instance (e.g. multiple towers) gets the sprite,
+  // not just the primary actor.
+  const actors = useParentActors(parentId);
+  const actorsKey = actors.map((a) => a.id).join(",");
   const reactFlow = useReactFlow();
   const allNodes = useNodes();
   const imageNodes = allNodes.filter((n) => n.type === "image");
@@ -32,7 +35,7 @@ export default function SpriteModifier({ id, data, parentId }: NodeProps) {
   const assetVersion = useAssetVersion();
 
   useEffect(() => {
-    if (!actor) return;
+    if (actors.length === 0) return;
     let cancelled = false;
     const apply = async () => {
       if (spritesheetNodeId) {
@@ -40,7 +43,7 @@ export default function SpriteModifier({ id, data, parentId }: NodeProps) {
         if (!sheet) return;
         const sprite = sheet.sprites[frameIndex];
         if (cancelled || !sprite) return;
-        actor.graphics.use(sprite);
+        for (const a of actors) a.graphics.use(sprite.clone());
         return;
       }
       if (imageNodeId) {
@@ -52,14 +55,14 @@ export default function SpriteModifier({ id, data, parentId }: NodeProps) {
           return;
         }
         if (cancelled) return;
-        actor.graphics.use(image.toSprite());
+        for (const a of actors) a.graphics.use(image.toSprite());
       }
     };
     apply();
     return () => {
       cancelled = true;
     };
-  }, [actor, imageNodeId, spritesheetNodeId, frameIndex, assetVersion]);
+  }, [actorsKey, imageNodeId, spritesheetNodeId, frameIndex, assetVersion]);
 
   const summary = spritesheetNodeId
     ? `${spritesheetNodeId} • ${frameIndex}`

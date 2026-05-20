@@ -112,6 +112,15 @@ export default function TiledMapNode({ id, data }: NodeProps) {
     col: number;
     row: number;
   } | null>(null);
+  // Visual creep-path editor: a list of {x,y} world-pixel waypoints, drawn as
+  // a numbered polyline over the map. Click cells to append; click near a
+  // waypoint to remove. A PathFollow modifier reads these via `pathFrom`.
+  const [editPath, setEditPath] = useState<boolean>(
+    (data.editPath as boolean | undefined) ?? false,
+  );
+  const [pathWaypoints, setPathWaypoints] = useState<{ x: number; y: number }[]>(
+    (data.pathWaypoints as { x: number; y: number }[] | undefined) ?? [],
+  );
   const tmxRef = useRef<TiledResource | null>(null);
   const previewRef = useRef<HTMLCanvasElement>(null);
 
@@ -356,27 +365,65 @@ export default function TiledMapNode({ id, data }: NodeProps) {
         th + 1,
       );
     }
-  }, [mapInfo, layers, tilesets, hidden, debug, selectedCell]);
+    // Creep-path overlay (numbered waypoints + connecting line).
+    if (pathWaypoints.length > 0) {
+      const toPx = (w: { x: number; y: number }) => ({
+        x: (w.x - posX) * scale,
+        y: (w.y - posY) * scale,
+      });
+      ctx.strokeStyle = "rgba(155, 231, 255, 0.95)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      pathWaypoints.forEach((w, i) => {
+        const p = toPx(w);
+        if (i === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      });
+      ctx.stroke();
+      pathWaypoints.forEach((w, i) => {
+        const p = toPx(w);
+        ctx.fillStyle = i === 0 ? "#3fbf6b" : i === pathWaypoints.length - 1 ? "#ef4444" : "#9be7ff";
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#0b0d12";
+        ctx.font = "8px ui-monospace, monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(i + 1), p.x, p.y);
+      });
+    }
+  }, [mapInfo, layers, tilesets, hidden, debug, selectedCell, pathWaypoints, editPath, posX, posY]);
 
   const onCanvasClick = (e: any) => {
-    if (!debug || !mapInfo) return;
+    if ((!debug && !editPath) || !mapInfo) return;
     const canvas = previewRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const xCss = e.clientX - rect.left;
-    const yCss = e.clientY - rect.top;
-    // The canvas may be displayed at a different size from its backing
-    // store; rect width/height are in CSS pixels, canvas.width/height in
-    // backing-store pixels.
     const cssToCanvasX = canvas.width / rect.width;
     const cssToCanvasY = canvas.height / rect.height;
-    const px = xCss * cssToCanvasX;
-    const py = yCss * cssToCanvasY;
+    const px = (e.clientX - rect.left) * cssToCanvasX;
+    const py = (e.clientY - rect.top) * cssToCanvasY;
     const scale = scaleRef.current || 1;
     const col = Math.floor(px / (mapInfo.tilewidth * scale));
     const row = Math.floor(py / (mapInfo.tileheight * scale));
-    if (col < 0 || col >= mapInfo.width || row < 0 || row >= mapInfo.height) {
-      setSelectedCell(null);
+    if (col < 0 || col >= mapInfo.width || row < 0 || row >= mapInfo.height) return;
+
+    if (editPath) {
+      // World pixel at the clicked cell centre.
+      const wx = col * mapInfo.tilewidth + mapInfo.tilewidth / 2 + posX;
+      const wy = row * mapInfo.tileheight + mapInfo.tileheight / 2 + posY;
+      // Click near an existing waypoint → remove it; else append.
+      const near = mapInfo.tilewidth * 0.75;
+      const hitIdx = pathWaypoints.findIndex(
+        (w) => Math.abs(w.x - wx) < near && Math.abs(w.y - wy) < near,
+      );
+      const next =
+        hitIdx >= 0
+          ? pathWaypoints.filter((_, i) => i !== hitIdx)
+          : [...pathWaypoints, { x: wx, y: wy }];
+      setPathWaypoints(next);
+      reactFlow.updateNodeData(id, { pathWaypoints: next });
       return;
     }
     setSelectedCell({ col, row });
@@ -497,6 +544,30 @@ export default function TiledMapNode({ id, data }: NodeProps) {
             if (!v) setSelectedCell(null);
           }}
         />
+        <Toggle
+          label="edit path"
+          checked={editPath}
+          onChange={(v) => {
+            setEditPath(v);
+            reactFlow.updateNodeData(id, { editPath: v });
+          }}
+        />
+        {editPath && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+            <span style={{ fontSize: 10, color: "var(--text-subtle)", lineHeight: 1.3 }}>
+              click tiles to add waypoints · click a dot to remove ({pathWaypoints.length})
+            </span>
+            <button
+              className="nrpg-btn"
+              onClick={() => {
+                setPathWaypoints([]);
+                reactFlow.updateNodeData(id, { pathWaypoints: [] });
+              }}
+            >
+              clear
+            </button>
+          </div>
+        )}
         <div
           style={{
             fontSize: 11,
@@ -623,7 +694,7 @@ export default function TiledMapNode({ id, data }: NodeProps) {
               style={{
                 display: "block",
                 imageRendering: "pixelated",
-                cursor: debug ? "crosshair" : "default",
+                cursor: debug || editPath ? "crosshair" : "default",
               }}
             />
           </div>

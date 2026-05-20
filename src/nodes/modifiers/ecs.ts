@@ -10,6 +10,7 @@ export {
   InputComponent,
   RequestedHeadingComponent,
   type MovementStyle,
+  type AxisLock,
   MovementComponent,
   FollowerComponent,
   ChaseComponent,

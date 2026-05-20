@@ -12,7 +12,15 @@ import { createPortal } from "preact/compat";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { useGame } from "../App";
 import { Button, Field, NodeBody, NodeCard, NodeHeader } from "../ui";
-import { on, useHitboxDebug } from "./modifiers/shared";
+import {
+  on,
+  useHitboxDebug,
+  useCurrentState,
+  usePoints,
+  useWaveInfo,
+  setPlayModePublished,
+  setGameRect,
+} from "./modifiers/shared";
 import { HealthComponent } from "./modifiers/ecs";
 
 export default function Game({ id, data }: NodeProps) {
@@ -44,6 +52,14 @@ export default function Game({ id, data }: NodeProps) {
   );
   const [playMode, setPlayMode] = useState(false);
   const [hitboxDebug, setHitboxDebug] = useHitboxDebug();
+  const machineState = useCurrentState();
+  const points = usePoints();
+  const waveInfo = useWaveInfo();
+  // Publish play mode so other nodes (e.g. a Build Menu toolbar) can show
+  // overlays only while playing.
+  useEffect(() => {
+    setPlayModePublished(playMode);
+  }, [playMode]);
   const [previewRect, setPreviewRect] = useState({
     left: 0,
     top: 0,
@@ -291,12 +307,21 @@ export default function Game({ id, data }: NodeProps) {
           return prev;
         return next;
       });
+      // Publish the live canvas rect so HUD nodes (Toolbar) can dock inside
+      // the game view — works in the editor preview and in fullscreen play.
+      const canvas = ref.current;
+      if (canvas) {
+        const r = canvas.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0)
+          setGameRect({ x: r.left, y: r.top, w: r.width, h: r.height });
+      }
       requestAnimationFrame(tick);
     };
-    const id = requestAnimationFrame(tick);
+    const rafId = requestAnimationFrame(tick);
     return () => {
       active = false;
-      cancelAnimationFrame(id);
+      cancelAnimationFrame(rafId);
+      setGameRect(null);
     };
   }, [game.entities, game.resetTick]);
 
@@ -466,6 +491,32 @@ export default function Game({ id, data }: NodeProps) {
                 color:
                   (n.data?.color as string | undefined) ?? "#ffd700",
               }));
+              if (machineState.name) {
+                pills.push({
+                  key: "__state",
+                  anchor: "top-right",
+                  text: machineState.hint
+                    ? `${machineState.name} — ${machineState.hint}`
+                    : machineState.name,
+                  color: "#9be7ff",
+                });
+              }
+              if (points > 0) {
+                pills.push({
+                  key: "__points",
+                  anchor: "top-right",
+                  text: `💰 ${points}`,
+                  color: "#ffe066",
+                });
+              }
+              if (waveInfo) {
+                pills.push({
+                  key: "__wave",
+                  anchor: "top-left",
+                  text: waveInfo,
+                  color: "#ff9b6b",
+                });
+              }
               if (playerHp) {
                 const filled = Math.max(0, playerHp.current);
                 const empty = Math.max(0, playerHp.max - playerHp.current);

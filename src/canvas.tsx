@@ -38,6 +38,10 @@ import AttackModifier from "./nodes/modifiers/attack";
 import PatrolModifier from "./nodes/modifiers/patrol";
 import ChaseModifier from "./nodes/modifiers/chase";
 import DirectionalAnimationModifier from "./nodes/modifiers/directionalAnimation";
+import BallModifier from "./nodes/modifiers/ball";
+import PathFollowModifier from "./nodes/modifiers/pathFollow";
+import TowerModifier from "./nodes/modifiers/tower";
+import HealthSpriteModifier from "./nodes/modifiers/healthSprite";
 import SceneSwitchModifier from "./nodes/modifiers/sceneSwitch";
 import ClickModifier from "./nodes/modifiers/click";
 import ImageNode from "./nodes/assets/image";
@@ -46,6 +50,9 @@ import AnimationNode from "./nodes/assets/animation";
 import SoundNode from "./nodes/assets/sound";
 import TiledMapNode from "./nodes/assets/tiledMap";
 import CounterNode from "./nodes/counter";
+import StateMachineNode from "./nodes/stateMachine";
+import ToolbarNode from "./nodes/toolbar";
+import WaveSpawnerNode from "./nodes/waveSpawner";
 import { SLOT_WIDTH } from "./nodes/modifiers/shared";
 import Sidebar, { DRAG_MIME, MODIFIER_KINDS, NODE_KINDS } from "./sidebar";
 
@@ -77,6 +84,10 @@ const nodeTypes = {
   patrolModifier: PatrolModifier,
   chaseModifier: ChaseModifier,
   directionalAnimationModifier: DirectionalAnimationModifier,
+  ballModifier: BallModifier,
+  pathFollowModifier: PathFollowModifier,
+  towerModifier: TowerModifier,
+  healthSpriteModifier: HealthSpriteModifier,
   sceneSwitchModifier: SceneSwitchModifier,
   clickModifier: ClickModifier,
   image: ImageNode,
@@ -85,11 +96,14 @@ const nodeTypes = {
   sound: SoundNode,
   tiledMap: TiledMapNode,
   counter: CounterNode,
+  stateMachine: StateMachineNode,
+  toolbar: ToolbarNode,
+  waveSpawner: WaveSpawnerNode,
 };
 
 const modifierDefaults: Record<string, Record<string, unknown>> = {
   inputModifier: { controls: "wasd" },
-  movementModifier: { style: "velocity", speed: 100, tickMs: 150, cellSize: 20 },
+  movementModifier: { style: "velocity", speed: 100, tickMs: 150, cellSize: 20, axisLock: "none" },
   collisionRuleModifier: {
     target: "wall",
     action: "kill",
@@ -169,6 +183,9 @@ const modifierDefaults: Record<string, Record<string, unknown>> = {
     startDirection: "right",
     pauseAtTurnMs: 0,
     axis: "horizontal",
+    chaseTag: "",
+    sightRange: 0,
+    sightAngle: 90,
   },
   chaseModifier: {
     targetTag: "player",
@@ -182,6 +199,43 @@ const modifierDefaults: Record<string, Record<string, unknown>> = {
     frameDurationMs: 120,
     attackEvent: "",
     attackMs: 250,
+  },
+  ballModifier: {
+    speed: 220,
+    paddleTag: "paddle",
+    wallTag: "hwall",
+    centerX: 300,
+    centerY: 200,
+    leftEvent: "p2-scored",
+    rightEvent: "p1-scored",
+  },
+  pathFollowModifier: {
+    speed: 45,
+    delayMs: 0,
+    staggerMs: 900,
+    baseTag: "base",
+    baseDamage: 1,
+    endEvent: "base-hit",
+    gameOverEvent: "td-game-over",
+    startEvent: "",
+    clearedEvent: "",
+    pathFrom: "",
+    waypoints: [],
+  },
+  towerModifier: {
+    range: 70,
+    damage: 1,
+    cooldownMs: 700,
+    targetTag: "enemy",
+    killEvent: "enemy-killed",
+  },
+  healthSpriteModifier: {
+    spritesheetNodeId: "",
+    goodFrame: 0,
+    damagedFrame: 1,
+    brokenFrame: 2,
+    damagedBelow: 0.66,
+    brokenBelow: 0.33,
   },
   sceneSwitchModifier: {
     eventName: "",
@@ -264,6 +318,54 @@ const nodeDefaults: Record<string, Record<string, unknown>> = {
     resetEventName: "",
     anchor: "top-left",
     color: "#ffd700",
+  },
+  stateMachine: {
+    label: "State Machine",
+    initial: "BUILD",
+    resetEvent: "",
+    states: [
+      { name: "BUILD", hint: "press SPACE", enterEvent: "build-state" },
+      { name: "ATTACK", enterEvent: "attack-state" },
+    ],
+    transitions: [
+      { from: "BUILD", to: "ATTACK", key: "Space" },
+      { from: "ATTACK", to: "BUILD", event: "round-over" },
+    ],
+  },
+  waveSpawner: {
+    label: "Wave Spawner",
+    sceneId: "",
+    pathFrom: "",
+    enemySheet: "",
+    enemyFrames: [0, 4, 8, 12],
+    enemyW: 16,
+    enemyH: 16,
+    waves: 3,
+    count0: 5,
+    countAdd: 3,
+    hp0: 3,
+    hpAdd: 1,
+    speed0: 42,
+    speedAdd: 8,
+    staggerMs: 850,
+    baseTag: "base",
+    baseDamage: 1,
+    gameOverEvent: "td-game-over",
+    startEvent: "attack-phase",
+    waveClearedEvent: "wave-cleared",
+    levelClearedEvent: "level-cleared",
+    killEvent: "enemy-killed",
+  },
+  toolbar: {
+    label: "Toolbar",
+    activeState: "",
+    anchor: "bottom",
+    orientation: "horizontal",
+    startingPoints: 0,
+    earnEvent: "",
+    earnAmount: 0,
+    iconSheetId: "",
+    items: [],
   },
 };
 

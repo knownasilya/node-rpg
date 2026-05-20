@@ -304,6 +304,165 @@ export function useHitboxDebug(): [boolean, (v: boolean) => void] {
   return [v, setHitboxDebug];
 }
 
+// Current state of the active State Machine node, published for the Game
+// overlay and any state-gated behavior (e.g. a Build Menu that's only active
+// in a given state). A single global "current state" is enough for the games
+// we build; the State Machine node owns the transitions.
+let currentState = "";
+let currentStateHint = "";
+const stateListeners = new Set<() => void>();
+export function setCurrentState(name: string, hint = ""): void {
+  if (currentState === name && currentStateHint === hint) return;
+  currentState = name;
+  currentStateHint = hint;
+  for (const cb of Array.from(stateListeners)) {
+    try {
+      cb();
+    } catch {}
+  }
+}
+export function getCurrentState(): { name: string; hint: string } {
+  return { name: currentState, hint: currentStateHint };
+}
+export function useCurrentState(): { name: string; hint: string } {
+  const [v, setV] = useState({ name: currentState, hint: currentStateHint });
+  useEffect(() => {
+    const cb = () => setV({ name: currentState, hint: currentStateHint });
+    stateListeners.add(cb);
+    cb();
+    return () => {
+      stateListeners.delete(cb);
+    };
+  }, []);
+  return v;
+}
+
+// Points / economy store — a spendable currency (distinct from a Counter,
+// which only counts up). A Build Menu earns points (e.g. per kill) and spends
+// them to place towers; the Game overlay can show the balance.
+let points = 0;
+const pointsListeners = new Set<() => void>();
+function notifyPoints() {
+  for (const cb of Array.from(pointsListeners)) {
+    try {
+      cb();
+    } catch {}
+  }
+}
+export function getPoints(): number {
+  return points;
+}
+export function setPoints(n: number): void {
+  if (points === n) return;
+  points = n;
+  notifyPoints();
+}
+export function addPoints(d: number): void {
+  setPoints(points + d);
+}
+export function usePoints(): number {
+  const [v, setV] = useState(points);
+  useEffect(() => {
+    const cb = () => setV(points);
+    pointsListeners.add(cb);
+    cb();
+    return () => {
+      pointsListeners.delete(cb);
+    };
+  }, []);
+  return v;
+}
+
+// Whether the Game is in fullscreen "play" mode — published by the Game node
+// so overlays rendered by other nodes (e.g. a Build Menu toolbar) can show
+// only while playing.
+let playModeOn = false;
+const playModeListeners = new Set<() => void>();
+export function setPlayModePublished(on: boolean): void {
+  if (playModeOn === on) return;
+  playModeOn = on;
+  for (const cb of Array.from(playModeListeners)) {
+    try {
+      cb();
+    } catch {}
+  }
+}
+export function usePlayMode(): boolean {
+  const [v, setV] = useState(playModeOn);
+  useEffect(() => {
+    const cb = () => setV(playModeOn);
+    playModeListeners.add(cb);
+    cb();
+    return () => {
+      playModeListeners.delete(cb);
+    };
+  }, []);
+  return v;
+}
+
+// On-screen rectangle of the game canvas (in CSS pixels), published by the
+// Game node every frame for both the editor preview and fullscreen play. HUD
+// nodes (e.g. the Toolbar) anchor to it so they render *inside the game view*
+// in either mode, instead of as a separate fullscreen-only overlay.
+export type GameRect = { x: number; y: number; w: number; h: number };
+let gameRect: GameRect | null = null;
+const gameRectListeners = new Set<() => void>();
+export function setGameRect(r: GameRect | null): void {
+  const same =
+    (!r && !gameRect) ||
+    (!!r &&
+      !!gameRect &&
+      Math.round(r.x) === Math.round(gameRect.x) &&
+      Math.round(r.y) === Math.round(gameRect.y) &&
+      Math.round(r.w) === Math.round(gameRect.w) &&
+      Math.round(r.h) === Math.round(gameRect.h));
+  if (same) return;
+  gameRect = r;
+  for (const cb of Array.from(gameRectListeners)) {
+    try {
+      cb();
+    } catch {}
+  }
+}
+export function useGameRect(): GameRect | null {
+  const [v, setV] = useState(gameRect);
+  useEffect(() => {
+    const cb = () => setV(gameRect);
+    gameRectListeners.add(cb);
+    cb();
+    return () => {
+      gameRectListeners.delete(cb);
+    };
+  }, []);
+  return v;
+}
+
+// Wave progress text (e.g. "Wave 2/3") published by a Wave Spawner and shown
+// as a HUD pill by the Game node.
+let waveInfo = "";
+const waveInfoListeners = new Set<() => void>();
+export function setWaveInfo(s: string): void {
+  if (waveInfo === s) return;
+  waveInfo = s;
+  for (const cb of Array.from(waveInfoListeners)) {
+    try {
+      cb();
+    } catch {}
+  }
+}
+export function useWaveInfo(): string {
+  const [v, setV] = useState(waveInfo);
+  useEffect(() => {
+    const cb = () => setV(waveInfo);
+    waveInfoListeners.add(cb);
+    cb();
+    return () => {
+      waveInfoListeners.delete(cb);
+    };
+  }, []);
+  return v;
+}
+
 export function registerImage(id: string, image: ImageSource): void {
   imageSources.set(id, image);
   bumpAssetVersion();

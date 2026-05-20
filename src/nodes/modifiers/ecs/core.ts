@@ -58,6 +58,8 @@ export class RequestedHeadingComponent extends Component {
 
 export type MovementStyle = "velocity" | "grid-step" | "continuous-heading";
 
+export type AxisLock = "none" | "x" | "y";
+
 export class MovementComponent extends Component {
   accumulator = 0;
   latchedHeading: Vector = vec(0, 0);
@@ -66,6 +68,9 @@ export class MovementComponent extends Component {
     public speed: number = 100,
     public tickMs: number = 150,
     public cellSize: number = 20,
+    // Restrict motion to a single axis: "y" = vertical only (e.g. a pong
+    // paddle), "x" = horizontal only, "none" = free.
+    public axisLock: AxisLock = "none",
   ) {
     super();
   }
@@ -442,7 +447,9 @@ export class MovementSystem extends System {
       const h = req.heading;
 
       if (m.style === "velocity") {
-        motion.vel = vec(h.x * m.speed, h.y * m.speed);
+        const lx = m.axisLock === "y" ? 0 : h.x;
+        const ly = m.axisLock === "x" ? 0 : h.y;
+        motion.vel = vec(lx * m.speed, ly * m.speed);
       } else if (m.style === "grid-step") {
         motion.vel = vec(0, 0);
         m.latchedHeading = latchCardinal(h, m.latchedHeading);

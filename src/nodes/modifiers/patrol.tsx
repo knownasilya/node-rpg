@@ -35,6 +35,20 @@ export default function PatrolModifier({ id, data, parentId }: NodeProps) {
     (data.axis as "horizontal" | "vertical" | undefined) ?? "horizontal",
   );
   const horizontal = axis === "horizontal";
+  // Optional aggro: when a `chaseTag` actor comes within `sightRange`, break
+  // off patrol and home in on it (full 2D), resuming patrol once it leaves.
+  const [chaseTag, setChaseTag] = useState<string>(
+    (data.chaseTag as string | undefined) ?? "",
+  );
+  const [sightRange, setSightRange] = useState<number>(
+    (data.sightRange as number | undefined) ?? 0,
+  );
+  // Vision is directional: the target must be within this cone (full angle,
+  // degrees) of the way the patroller is currently facing. 360 = see all
+  // around; 90 = a forward quarter-cone.
+  const [sightAngle, setSightAngle] = useState<number>(
+    (data.sightAngle as number | undefined) ?? 90,
+  );
 
   useEffect(() => {
     if (actors.length === 0) return;
@@ -111,6 +125,42 @@ export default function PatrolModifier({ id, data, parentId }: NodeProps) {
         if (!state) continue;
         const motion = a.get(MotionComponent);
         const req = a.get(RequestedHeadingComponent);
+        // Directional vision: chase a `chaseTag` target only if it's within
+        // sightRange AND inside the cone the patroller is currently facing
+        // (i.e. the way it's walking). Outside the cone it stays oblivious.
+        if (chaseTag && sightRange > 0 && a.scene) {
+          // Facing unit vector = current patrol direction along the axis.
+          const fvx = horizontal ? state.dir : 0;
+          const fvy = horizontal ? 0 : state.dir;
+          const cosThresh = Math.cos(((sightAngle / 2) * Math.PI) / 180);
+          let tgt: Actor | undefined;
+          let bestD2 = sightRange * sightRange;
+          for (const o of a.scene.actors) {
+            if (o === a || !o.hasTag(chaseTag)) continue;
+            const ox = o.pos.x - a.pos.x;
+            const oy = o.pos.y - a.pos.y;
+            const d2 = ox * ox + oy * oy;
+            if (d2 > sightRange * sightRange) continue;
+            const len = Math.hypot(ox, oy) || 1;
+            // Cone test (skip when sightAngle >= 360 → see all around).
+            if (sightAngle < 360) {
+              const dot = (ox / len) * fvx + (oy / len) * fvy;
+              if (dot < cosThresh) continue;
+            }
+            if (d2 <= bestD2) {
+              bestD2 = d2;
+              tgt = o as Actor;
+            }
+          }
+          if (tgt) {
+            const ox = tgt.pos.x - a.pos.x;
+            const oy = tgt.pos.y - a.pos.y;
+            const len = Math.hypot(ox, oy) || 1;
+            if (motion) motion.vel = vec((ox / len) * state.speedI, (oy / len) * state.speedI);
+            if (req) req.heading = vec(ox / len, oy / len);
+            continue;
+          }
+        }
         // Distance from home along the active axis.
         const d = (horizontal ? a.pos.x : a.pos.y) - state.home;
         // Flip when we step past the per-instance range. The pause window
@@ -147,7 +197,7 @@ export default function PatrolModifier({ id, data, parentId }: NodeProps) {
       }
     }, 1000 / 60);
     return () => clearInterval(intv);
-  }, [actorsKey, speed, range, startDirection, pauseAtTurnMs, stayOnPlatform, axis]);
+  }, [actorsKey, speed, range, startDirection, pauseAtTurnMs, stayOnPlatform, axis, chaseTag, sightRange, sightAngle]);
 
   return (
     <ModShell
@@ -213,6 +263,35 @@ export default function PatrolModifier({ id, data, parentId }: NodeProps) {
           checked={stayOnPlatform}
           onChange={setStayOnPlatform}
         />
+        <Field label="chase tag">
+          <input
+            type="text"
+            className="nrpg-input"
+            style={{ width: 120, textAlign: "left" }}
+            value={chaseTag}
+            placeholder="(none) e.g. player"
+            onChange={(e) => setChaseTag(e.currentTarget.value)}
+          />
+        </Field>
+        <Field label="sight range">
+          <input
+            type="number"
+            min={0}
+            className="nrpg-input"
+            value={sightRange}
+            onChange={(e) => setSightRange(+e.currentTarget.value)}
+          />
+        </Field>
+        <Field label="sight angle">
+          <input
+            type="number"
+            min={0}
+            max={360}
+            className="nrpg-input"
+            value={sightAngle}
+            onChange={(e) => setSightAngle(+e.currentTarget.value)}
+          />
+        </Field>
     </ModShell>
   );
 }

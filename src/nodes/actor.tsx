@@ -23,6 +23,10 @@ const colors = {
   green: Color.Green,
   blue: Color.Blue,
   yellow: Color.Yellow,
+  white: Color.White,
+  gray: Color.Gray,
+  black: Color.Black,
+  orange: Color.Orange,
 } as const;
 
 class Player extends Actor {
