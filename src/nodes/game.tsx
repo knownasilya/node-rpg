@@ -135,7 +135,21 @@ export default function Game({ id, data }: NodeProps) {
   useEffect(() => {
     if (!game.engine) return;
     try {
-      game.engine.screen.viewport = { width, height };
+      // Use a percent viewport so Excalibur reads the canvas's actual CSS
+      // size (canvas.offsetWidth/Height) when converting pointer events
+      // to world coords. The canvas is CSS-scaled differently in edit
+      // mode (matches the placeholder rect) vs play mode (95vw/95vh) —
+      // hard-coding pixel viewport to `width`/`height` would leave
+      // pointer math stuck on the small size and clicks in play mode
+      // would land far from where the cursor visually points, so the
+      // Game Over restart button (and any other clickable actor) becomes
+      // unreachable.
+      game.engine.screen.viewport = {
+        width: 100,
+        height: 100,
+        widthUnit: "percent",
+        heightUnit: "percent",
+      };
       game.engine.screen.resolution = { width, height };
       game.engine.screen.applyResolutionAndViewport();
     } catch {}
