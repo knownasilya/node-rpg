@@ -12,7 +12,7 @@ import { createPortal } from "preact/compat";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { useGame } from "../App";
 import { Button, Field, NodeBody, NodeCard, NodeHeader } from "../ui";
-import { on } from "./modifiers/shared";
+import { on, useHitboxDebug } from "./modifiers/shared";
 import { HealthComponent } from "./modifiers/ecs";
 
 export default function Game({ id, data }: NodeProps) {
@@ -43,6 +43,7 @@ export default function Game({ id, data }: NodeProps) {
     (data.height as number | undefined) ?? 320
   );
   const [playMode, setPlayMode] = useState(false);
+  const [hitboxDebug, setHitboxDebug] = useHitboxDebug();
   const [previewRect, setPreviewRect] = useState({
     left: 0,
     top: 0,
@@ -342,6 +343,13 @@ export default function Game({ id, data }: NodeProps) {
           onTitleChange={(v) => reactFlow.updateNodeData(id, { label: v })}
           actions={
             <>
+              <Button
+                onClick={() => setHitboxDebug(!hitboxDebug)}
+                active={hitboxDebug}
+                title="Show hitboxes (red), hurtboxes (blue), and damage sparks (yellow)"
+              >
+                ⊡ hitboxes
+              </Button>
               <Button onClick={game.reset} title="Reset the game state">
                 ↻ reset
               </Button>

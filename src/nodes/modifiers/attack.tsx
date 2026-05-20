@@ -1,13 +1,26 @@
 import { NodeProps } from "@xyflow/react";
 import { Keys } from "excalibur";
 import { useEffect, useState } from "preact/hooks";
-import { Field, ModShell, TagsField, Toggle } from "../../ui";
+import { Field, ModShell, TagsField } from "../../ui";
 import {
   HitboxComponent,
+  RequestedHeadingComponent,
   type BoxShape,
 } from "./ecs";
 import { emit, useParentActors } from "./shared";
 import { PlayerAnimationStateComponent as AnimationComponent } from "./animation";
+import { getActorFacing } from "./directionalAnimation";
+
+// How the swing hitbox is placed each attack:
+//   facing    – platformer-style box in front, mirrored left/right via the
+//               actor's graphics.flipHorizontal.
+//   omni      – square centered on the actor (hits all directions).
+//   direction – box in the actor's current 4-way facing (top-down). Reads the
+//               Directional Anim component, falling back to movement heading.
+//   target    – box aimed toward the nearest actor carrying a target tag
+//               (e.g. an enemy swinging toward the player).
+type HitboxMode = "facing" | "omni" | "direction" | "target";
+const HITBOX_MODES: HitboxMode[] = ["facing", "omni", "direction", "target"];
 
 // AttackModifier: presses an "attack" key to activate the actor's
 // HitboxComponent for a short window AND pin the AnimationComponent's
@@ -42,11 +55,11 @@ export default function AttackModifier({ id, data, parentId }: NodeProps) {
   const [boxHeight, setBoxHeight] = useState<number>(
     (data.boxHeight as number | undefined) ?? 16,
   );
-  // Top-down games want a swing that hits in every direction; platformers
-  // want a facing-offset box. When on, the hitbox is a square centered on
-  // the actor (side = 2*reach) and `height` is ignored.
-  const [omnidirectional, setOmnidirectional] = useState<boolean>(
-    (data.omnidirectional as boolean | undefined) ?? false,
+  // Hitbox placement mode. Migrates the old `omnidirectional` boolean:
+  // true -> "omni", false/unset -> "facing".
+  const [hitboxMode, setHitboxMode] = useState<HitboxMode>(
+    (data.hitboxMode as HitboxMode | undefined) ??
+      (data.omnidirectional ? "omni" : "facing"),
   );
   const [targetTags, setTargetTags] = useState<string[]>(
     (data.targetTags as string[] | undefined) ?? ["enemy"],
@@ -63,21 +76,62 @@ export default function AttackModifier({ id, data, parentId }: NodeProps) {
     // attacks). Keep a per-actor record of the active swing's timer so
     // multiple actors with this modifier coexist cleanly.
     const swingTimers = new Map<number, ReturnType<typeof setTimeout>>();
-    const setSwingShapes = (graphics: any): BoxShape[] => {
-      if (omnidirectional) {
+    // A box of length `reach` × width `boxHeight`, placed in front of the
+    // actor along the given unit direction (snapped to the dominant axis).
+    const forwardBox = (fx: number, fy: number): BoxShape[] => {
+      if (Math.abs(fx) >= Math.abs(fy)) {
+        const x = fx >= 0 ? 0 : -reach;
+        return [{ x, y: -boxHeight / 2, w: reach, h: boxHeight }];
+      }
+      const y = fy >= 0 ? 0 : -reach;
+      return [{ x: -boxHeight / 2, y, w: boxHeight, h: reach }];
+    };
+    const headingDir = (a: any): { x: number; y: number } | undefined => {
+      const h = a.get?.(RequestedHeadingComponent)?.heading;
+      return h && (h.x !== 0 || h.y !== 0) ? { x: h.x, y: h.y } : undefined;
+    };
+    const nearestTargetDir = (a: any): { x: number; y: number } | undefined => {
+      const scene = a.scene;
+      if (!scene) return undefined;
+      let best: any;
+      let bestD2 = Infinity;
+      for (const o of scene.actors) {
+        if (o === a) continue;
+        if (!targetTags.some((t) => o.hasTag?.(t))) continue;
+        const dx = o.pos.x - a.pos.x;
+        const dy = o.pos.y - a.pos.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestD2) {
+          bestD2 = d2;
+          best = o;
+        }
+      }
+      if (!best) return undefined;
+      return { x: best.pos.x - a.pos.x, y: best.pos.y - a.pos.y };
+    };
+    const setSwingShapes = (a: any): BoxShape[] => {
+      if (hitboxMode === "omni") {
         // Square centered on the actor — covers all four directions.
         return [{ x: -reach, y: -reach, w: reach * 2, h: reach * 2 }];
       }
-      const flipped = !!graphics?.flipHorizontal;
+      if (hitboxMode === "direction") {
+        const f = getActorFacing(a) ?? headingDir(a) ?? { x: 0, y: 1 };
+        return forwardBox(f.x, f.y);
+      }
+      if (hitboxMode === "target") {
+        const f =
+          nearestTargetDir(a) ?? getActorFacing(a) ?? headingDir(a) ?? { x: 0, y: 1 };
+        return forwardBox(f.x, f.y);
+      }
+      // "facing": platformer left/right via graphics flip.
+      const flipped = !!a.graphics?.flipHorizontal;
       const x = flipped ? -reach : 0;
-      const y = -boxHeight / 2;
-      return [{ x, y, w: reach, h: boxHeight }];
+      return [{ x, y: -boxHeight / 2, w: reach, h: boxHeight }];
     };
 
     const beginSwing = (a: any) => {
       const existing = a.get(HitboxComponent);
-      const graphics = a.graphics;
-      const shapes = setSwingShapes(graphics);
+      const shapes = setSwingShapes(a);
       if (existing) {
         existing.shapes = shapes;
         existing.damage = damage;
@@ -125,7 +179,7 @@ export default function AttackModifier({ id, data, parentId }: NodeProps) {
     damage,
     reach,
     boxHeight,
-    omnidirectional,
+    hitboxMode,
     targetTagsKey,
     emitEvent,
   ]);
@@ -178,7 +232,7 @@ export default function AttackModifier({ id, data, parentId }: NodeProps) {
             onChange={(e) => setReach(+e.currentTarget.value)}
           />
         </Field>
-        {!omnidirectional && (
+        {hitboxMode !== "omni" && (
           <Field label="height">
             <input
               type="number"
@@ -189,11 +243,19 @@ export default function AttackModifier({ id, data, parentId }: NodeProps) {
             />
           </Field>
         )}
-        <Toggle
-          label="omnidirectional"
-          checked={omnidirectional}
-          onChange={setOmnidirectional}
-        />
+        <Field label="hitbox">
+          <select
+            className="nrpg-select"
+            value={hitboxMode}
+            onChange={(e) => setHitboxMode(e.currentTarget.value as HitboxMode)}
+          >
+            {HITBOX_MODES.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </Field>
         <Field label="target tags">
           <TagsField
             value={targetTags}

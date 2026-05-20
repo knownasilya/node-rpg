@@ -14,7 +14,13 @@ import {
   vec,
   World,
 } from "excalibur";
-import { emit } from "../shared";
+import { emit, getHitboxDebug } from "../shared";
+
+// Ring of recent damage events for the debug overlay — a spark drawn at each
+// hit location for a short window so you can see exactly where/when an attack
+// connected. Populated by HitboxSystem, consumed by HitboxDebugSystem.
+type HitSpark = { x: number; y: number; until: number; amount: number };
+const recentHits: HitSpark[] = [];
 import {
   MovementComponent,
   RequestedHeadingComponent,
@@ -559,6 +565,22 @@ export class HitboxSystem extends System {
         }
         vb.invincibleUntil = now + vb.iFrameMs;
         emit("damage-dealt", { attacker: ha, victim: va, amount: hb.damage });
+        // Record the contact point (victim center) so the debug overlay can
+        // flash a spark there. Cap the buffer so it can't grow unbounded.
+        if (getHitboxDebug()) {
+          recentHits.push({
+            x: vat.pos.x,
+            y: vat.pos.y,
+            until: now + 450,
+            amount: hb.damage,
+          });
+          if (recentHits.length > 64) recentHits.splice(0, recentHits.length - 64);
+          console.debug(
+            `[hitbox] ${(ha as any).name ?? "?"} → ${(va as any).name ?? "?"} ` +
+              `dmg=${hb.damage} hp=${health ? health.current + "/" + health.max : "n/a"} ` +
+              `@(${Math.round(vat.pos.x)},${Math.round(vat.pos.y)})`,
+          );
+        }
       }
     }
   }
@@ -578,13 +600,34 @@ export class HitboxDebugSystem extends System {
     this.hurtQuery = world.query([HurtboxComponent, TransformComponent]);
   }
   update(_elapsed: number): void {
+    if (!getHitboxDebug()) return;
     const scene = this.world.scene;
-    const ctx: any = (scene as any)?.engine?.graphicsContext;
+    const engine: any = (scene as any)?.engine;
+    const ctx: any = engine?.graphicsContext;
     if (!ctx) return;
+    // Draw shapes in WORLD space: this Draw-phase system runs with an
+    // un-transformed (screen-space) context, so apply the same transform
+    // Excalibur uses for the world — translate to viewport center, scale by
+    // the camera zoom, then translate by the camera focus — otherwise the
+    // boxes stay screen-locked and drift away from the actors as the camera
+    // follows the player.
+    const cam: any = (scene as any)?.camera;
+    const hasCam = !!(cam?.transform && typeof ctx.multiply === "function");
+    if (hasCam) {
+      // Reuse the camera's own transform matrix — the exact one Excalibur
+      // applies to world entities — so the boxes line up regardless of zoom,
+      // pixel ratio, or camera shake. (Reconstructing it by hand mismatched
+      // under pixel-ratio scaling and left a constant offset.)
+      ctx.save?.();
+      ctx.multiply(cam.transform);
+    }
     for (const e of this.hitQuery.entities) {
       const hb = e.get(HitboxComponent);
       const tx = e.get(TransformComponent);
       if (!hb || !tx) continue;
+      // Only draw an ACTIVE hitbox — the attack box should vanish the moment
+      // the swing window ends (matches when it can actually deal damage).
+      if (!hb.active) continue;
       for (const s of hb.shapes) {
         ctx.drawRectangle?.(
           vec(tx.pos.x + s.x, tx.pos.y + s.y),
@@ -611,6 +654,26 @@ export class HitboxDebugSystem extends System {
         );
       }
     }
+    // Damage sparks: a fading yellow box centered where each recent hit
+    // landed. Expire old ones in place.
+    const now = performance.now();
+    for (let i = recentHits.length - 1; i >= 0; i--) {
+      const h = recentHits[i];
+      if (h.until <= now) {
+        recentHits.splice(i, 1);
+        continue;
+      }
+      const size = 10 + h.amount * 4;
+      ctx.drawRectangle?.(
+        vec(h.x - size / 2, h.y - size / 2),
+        size,
+        size,
+        { r: 255, g: 230, b: 0, a: 0.5 } as any,
+        { r: 255, g: 230, b: 0, a: 1 } as any,
+        2,
+      );
+    }
+    if (hasCam) ctx.restore?.();
   }
 }
 
@@ -621,4 +684,6 @@ export function registerPlatformerSystems(scene: Scene): void {
   scene.world.add(JumpSystem);
   scene.world.add(CameraFollowSystem);
   scene.world.add(HitboxSystem);
+  // Always registered; draws nothing unless the Game-header debug toggle is on.
+  scene.world.add(HitboxDebugSystem);
 }

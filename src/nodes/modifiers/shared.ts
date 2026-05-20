@@ -274,6 +274,36 @@ export function useAssetVersion(): number {
   return v;
 }
 
+// Hitbox/hurtbox debug overlay toggle. The HitboxDebugSystem (always
+// registered, gated on this flag) draws hitboxes red, hurtboxes blue, and a
+// spark wherever damage lands. The Game node header exposes the toggle.
+let hitboxDebug = false;
+const hitboxDebugListeners = new Set<() => void>();
+export function getHitboxDebug(): boolean {
+  return hitboxDebug;
+}
+export function setHitboxDebug(v: boolean): void {
+  if (hitboxDebug === v) return;
+  hitboxDebug = v;
+  for (const cb of Array.from(hitboxDebugListeners)) {
+    try {
+      cb();
+    } catch {}
+  }
+}
+export function useHitboxDebug(): [boolean, (v: boolean) => void] {
+  const [v, setV] = useState(hitboxDebug);
+  useEffect(() => {
+    const cb = () => setV(hitboxDebug);
+    hitboxDebugListeners.add(cb);
+    if (v !== hitboxDebug) setV(hitboxDebug);
+    return () => {
+      hitboxDebugListeners.delete(cb);
+    };
+  }, []);
+  return [v, setHitboxDebug];
+}
+
 export function registerImage(id: string, image: ImageSource): void {
   imageSources.set(id, image);
   bumpAssetVersion();

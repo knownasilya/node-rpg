@@ -159,7 +159,7 @@ const modifierDefaults: Record<string, Record<string, unknown>> = {
     damage: 1,
     reach: 18,
     boxHeight: 16,
-    omnidirectional: false,
+    hitboxMode: "facing",
     targetTags: ["enemy"],
     emitEvent: "player-attacked",
   },

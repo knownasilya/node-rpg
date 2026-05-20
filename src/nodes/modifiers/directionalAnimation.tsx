@@ -66,6 +66,25 @@ function colsOf(sheet: SpriteSheet): number {
   return (sheet as any).columns ?? Math.max(1, Math.floor(sheet.sprites.length / 4));
 }
 
+// Current 4-way facing of an actor as a unit vector, read from its
+// DirectionalAnimationComponent. Lets other modifiers (e.g. Attack) aim in
+// the direction the actor is facing. Returns undefined if the actor has no
+// directional-animation component.
+export function getActorFacing(actor: any): { x: number; y: number } | undefined {
+  const c = actor?.get?.(DirectionalAnimationComponent);
+  if (!c) return undefined;
+  switch (c.facing) {
+    case UP:
+      return { x: 0, y: -1 };
+    case LEFT:
+      return { x: -1, y: 0 };
+    case RIGHT:
+      return { x: 1, y: 0 };
+    default:
+      return { x: 0, y: 1 }; // DOWN
+  }
+}
+
 class DirectionalAnimationSystem extends System {
   static priority = 95;
   systemType = SystemType.Update;
