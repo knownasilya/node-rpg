@@ -587,8 +587,15 @@ export class HitboxSystem extends System {
         // Knockback: shove the (surviving) victim away from the attacker. Skip
         // on the killing blow so the death animation plays in place.
         if (vb.knockback > 0 && !died && !alreadyDead) {
-          let dx = vat.pos.x - hat.pos.x;
-          let dy = vat.pos.y - hat.pos.y;
+          // Directional: shove the victim the way the attack points. Fall back
+          // to the attacker→victim radial direction if the hitbox has no
+          // stamped direction (e.g. an omni swing or a contact hitbox).
+          let dx = hb.dirX;
+          let dy = hb.dirY;
+          if (dx === 0 && dy === 0) {
+            dx = vat.pos.x - hat.pos.x;
+            dy = vat.pos.y - hat.pos.y;
+          }
           const len = Math.hypot(dx, dy);
           if (len < 0.0001) {
             dx = 0;
