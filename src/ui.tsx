@@ -416,6 +416,15 @@ export function NodeConnections({
     return ((n?.data as any)?.label as string | undefined) ?? id;
   };
   const rowStyle: Record<string, any> = { padding: "2px 0" };
+  const ellipsisNames: Record<string, any> = {
+    marginLeft: 6,
+    color: "var(--text-subtle)",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    minWidth: 0,
+    maxWidth: 140,
+  };
   // Edges actually terminate at the card-edge default Handle; rendering
   // a second labeled Handle inside this section made it look like the
   // labels were the endpoints when they weren't. This section is now
@@ -463,15 +472,16 @@ export function NodeConnections({
       </div>
       {inputs.map((t) => {
         const matches = inboundFor(t);
+        const names = matches.map((m) => labelFor(m.source)).join(", ");
         return (
           <div key={`in-${t}`} style={rowStyle}>
-            <div>
-              ← <span style={{ color: "var(--text-strong)" }}>{t}</span>
+            <div style={{ display: "flex", minWidth: 0 }}>
+              <span style={{ flexShrink: 0 }}>
+                ← <span style={{ color: "var(--text-strong)" }}>{t}</span>
+              </span>
               {matches.length > 0 && (
-                <span
-                  style={{ marginLeft: 6, color: "var(--text-subtle)" }}
-                >
-                  {matches.map((m) => labelFor(m.source)).join(", ")}
+                <span style={ellipsisNames} title={names}>
+                  {names}
                 </span>
               )}
             </div>
@@ -480,15 +490,16 @@ export function NodeConnections({
       })}
       {outputs.map((t) => {
         const matches = outboundFor(t);
+        const names = matches.map((m) => labelFor(m.target)).join(", ");
         return (
           <div key={`out-${t}`} style={rowStyle}>
-            <div>
-              → <span style={{ color: "var(--text-strong)" }}>{t}</span>
+            <div style={{ display: "flex", minWidth: 0 }}>
+              <span style={{ flexShrink: 0 }}>
+                → <span style={{ color: "var(--text-strong)" }}>{t}</span>
+              </span>
               {matches.length > 0 && (
-                <span
-                  style={{ marginLeft: 6, color: "var(--text-subtle)" }}
-                >
-                  {matches.map((m) => labelFor(m.target)).join(", ")}
+                <span style={ellipsisNames} title={names}>
+                  {names}
                 </span>
               )}
             </div>

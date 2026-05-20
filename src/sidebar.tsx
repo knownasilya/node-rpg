@@ -13,6 +13,7 @@ const LAYOUT_COLUMNS: string[] = [
   "animation",
   "sound",
   "tiledMap",
+  "parallaxLayer",
   "scene",
   "game",
 ];
@@ -84,6 +85,12 @@ export const NODE_KINDS: ItemDef[] = [
     label: "Tiled Map",
     accent: "scene",
     description: "Mount a Tiled .tmj level (tile + object layers) into a Scene.",
+  },
+  {
+    kind: "parallaxLayer",
+    label: "Parallax Layer",
+    accent: "scene",
+    description: "Scrolling background image; sits between an Image and a Scene.",
   },
   {
     kind: "scene",

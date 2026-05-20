@@ -22,15 +22,17 @@ import {
   Canvas,
   CollisionType,
   Color,
+  ParallaxComponent,
   Scene,
   TileMap,
+  Vector,
   vec,
 } from "excalibur";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { useGame } from "../App";
 import { registerEcsSystems } from "./modifiers/ecs";
 import { registerAnimationSelectorSystem } from "./modifiers/animation";
-import { getTiledMap, useAssetVersion } from "./modifiers/shared";
+import { getImage, getTiledMap, useAssetVersion } from "./modifiers/shared";
 
 const bgColors = {
   black: Color.Black,
@@ -392,6 +394,17 @@ export default function SceneNode({ id, data }: NodeProps) {
       return `${n.id}@${px},${py}`;
     })
     .join(",");
+  const parallaxNodes = sourceConnections
+    .map((c) =>
+      nodes.find((n) => n.id === c.source && n.type === "parallaxLayer"),
+    )
+    .filter((n): n is NonNullable<typeof n> => !!n);
+  const parallaxKey = parallaxNodes
+    .map((n) => {
+      const d = n.data as any;
+      return `${n.id}@${d?.imageNodeId ?? ""}|${d?.parallaxFactorX ?? 0.5}|${d?.parallaxFactorY ?? 1}|${d?.z ?? -100}|${d?.posX ?? 0}|${d?.posY ?? 0}`;
+    })
+    .join(",");
   const assetVersion = useAssetVersion();
 
   useEffect(() => {
@@ -573,6 +586,57 @@ export default function SceneNode({ id, data }: NodeProps) {
     // the timing window where the tiled effect ran first with a null
     // sceneRef and silently skipped.
   }, [game.engine, tiledMapKey, assetVersion, game.entities, game.resetTick]);
+
+  // Mount Parallax Layer actors. Each connected parallaxLayer node maps to
+  // one Excalibur Actor with a sprite graphic + ParallaxComponent. The
+  // GraphicsSystem renders at `cameraPos * (1 - factor)`, so factor 0
+  // means screen-locked sky, factor 1 means moves-with-world. Rebuilds on
+  // any field change (parallaxKey) and on asset registration so a layer
+  // wired before its Image loaded still gets a sprite once the image is
+  // ready.
+  const parallaxActorsRef = useRef<Map<string, Actor>>(new Map());
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    const existing = parallaxActorsRef.current;
+    for (const [nodeId, actor] of Array.from(existing.entries())) {
+      try {
+        actor.kill();
+      } catch {}
+      existing.delete(nodeId);
+    }
+    for (const node of parallaxNodes) {
+      const d = node.data as any;
+      const imageNodeId = (d?.imageNodeId as string | undefined) ?? "";
+      if (!imageNodeId) continue;
+      const image = getImage(imageNodeId);
+      if (!image || !image.isLoaded()) continue;
+      const factorX = (d?.parallaxFactorX as number | undefined) ?? 0.5;
+      const factorY = (d?.parallaxFactorY as number | undefined) ?? 1;
+      const z = (d?.z as number | undefined) ?? -100;
+      const posX = (d?.posX as number | undefined) ?? 0;
+      const posY = (d?.posY as number | undefined) ?? 0;
+      const actor = new Actor({
+        name: `parallax-${node.id}`,
+        pos: vec(posX, posY),
+        anchor: Vector.Zero,
+        collisionType: CollisionType.PreventCollision,
+      });
+      actor.graphics.use(image.toSprite());
+      actor.addComponent(new ParallaxComponent(vec(factorX, factorY)));
+      actor.z = z;
+      scene.add(actor);
+      existing.set(node.id, actor);
+    }
+    return () => {
+      for (const [nodeId, actor] of Array.from(existing.entries())) {
+        try {
+          actor.kill();
+        } catch {}
+        existing.delete(nodeId);
+      }
+    };
+  }, [game.engine, parallaxKey, assetVersion, game.entities, game.resetTick]);
 
   return (
     <NodeCard accent="scene" style={{ minWidth: 240 }}>

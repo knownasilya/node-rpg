@@ -259,7 +259,7 @@ export const tiledPlatformerNodes: Node[] = [
       groupY: 420,
       collision: true,
       physicsType: "fixed",
-      invisible: false,
+      invisible: true,
       tags: ["solid"],
       shapes: [
         {
@@ -272,6 +272,27 @@ export const tiledPlatformerNodes: Node[] = [
           color: "gray",
         },
       ],
+    },
+  },
+  // Parallax background, shared by both gameplay scenes ------------------
+  {
+    id: "image-bg",
+    type: "image",
+    position: { x: 1680, y: 40 },
+    data: { label: "Sky", src: "/bg/bg1.png" },
+  },
+  {
+    id: "parallaxLayer-bg",
+    type: "parallaxLayer",
+    position: { x: 2040, y: 40 },
+    data: {
+      label: "Sky Parallax",
+      imageNodeId: "image-bg",
+      parallaxFactorX: 0.3,
+      parallaxFactorY: 0.5,
+      z: -200,
+      posX: -300,
+      posY: -200,
     },
   },
   // Asset nodes ---------------------------------------------------------
@@ -1019,6 +1040,10 @@ export const tiledPlatformerEdges = [
   { id: "e-tp-slime-s2", source: "actor-slime", target: "scene-2" },
   { id: "e-tp-door-s2", source: "actor-door", target: "scene-2" },
   { id: "e-tp-s2-g1", source: "scene-2", target: "game-1" },
+  // Parallax sky: one Image → one Parallax Layer → both gameplay scenes.
+  { id: "e-tp-bg-img-layer", source: "image-bg", target: "parallaxLayer-bg" },
+  { id: "e-tp-bg-layer-s1", source: "parallaxLayer-bg", target: "scene-1" },
+  { id: "e-tp-bg-layer-s2", source: "parallaxLayer-bg", target: "scene-2" },
   // Game Over scene: title text + clickable Restart button entity.
   { id: "e-tp-go-graphics", source: "graphicGroup-gameover", target: "scene-game-over" },
   { id: "e-tp-go-btn-visual", source: "graphicGroup-restart-btn-visual", target: "scene-game-over" },

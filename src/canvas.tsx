@@ -16,6 +16,7 @@ import { useGame } from "./App";
 import ActorNode from "./nodes/actor";
 import SceneNode from "./nodes/scene";
 import GraphicGroupNode from "./nodes/graphicGroup";
+import ParallaxLayerNode from "./nodes/parallaxLayer";
 import TailNode from "./nodes/tail";
 import SpawnerNode from "./nodes/spawner";
 import InputModifier from "./nodes/modifiers/input";
@@ -52,6 +53,7 @@ const nodeTypes = {
   actor: ActorNode,
   scene: SceneNode,
   graphicGroup: GraphicGroupNode,
+  parallaxLayer: ParallaxLayerNode,
   tail: TailNode,
   spawner: SpawnerNode,
   inputModifier: InputModifier,
@@ -229,6 +231,14 @@ const nodeDefaults: Record<string, Record<string, unknown>> = {
   },
   sound: { label: "Sound", src: "", volume: 1, loop: false },
   tiledMap: { label: "Tiled Map", src: "", spawnObjects: true },
+  parallaxLayer: {
+    label: "Parallax Layer",
+    parallaxFactorX: 0.5,
+    parallaxFactorY: 1,
+    z: -100,
+    posX: 0,
+    posY: 0,
+  },
   counter: {
     label: "Coins",
     eventName: "coin-collected",
