@@ -621,6 +621,24 @@ export class HitboxDebugSystem extends System {
       ctx.save?.();
       ctx.multiply(cam.transform);
     }
+    // Hurtboxes (blue) first, then hitboxes (red) on top — the attacker box
+    // is what you're usually inspecting, so it shouldn't be hidden under a
+    // hurtbox where they overlap.
+    for (const e of this.hurtQuery.entities) {
+      const hb = e.get(HurtboxComponent);
+      const tx = e.get(TransformComponent);
+      if (!hb || !tx) continue;
+      for (const s of hb.shapes) {
+        ctx.drawRectangle?.(
+          vec(tx.pos.x + s.x, tx.pos.y + s.y),
+          s.w,
+          s.h,
+          { r: 64, g: 128, b: 255, a: 0.22 } as any,
+          { r: 64, g: 128, b: 255, a: 0.9 } as any,
+          1,
+        );
+      }
+    }
     for (const e of this.hitQuery.entities) {
       const hb = e.get(HitboxComponent);
       const tx = e.get(TransformComponent);
@@ -633,23 +651,8 @@ export class HitboxDebugSystem extends System {
           vec(tx.pos.x + s.x, tx.pos.y + s.y),
           s.w,
           s.h,
-          { r: 255, g: 64, b: 64, a: 0.25 } as any,
-          { r: 255, g: 64, b: 64, a: 0.9 } as any,
-          1,
-        );
-      }
-    }
-    for (const e of this.hurtQuery.entities) {
-      const hb = e.get(HurtboxComponent);
-      const tx = e.get(TransformComponent);
-      if (!hb || !tx) continue;
-      for (const s of hb.shapes) {
-        ctx.drawRectangle?.(
-          vec(tx.pos.x + s.x, tx.pos.y + s.y),
-          s.w,
-          s.h,
-          { r: 64, g: 128, b: 255, a: 0.25 } as any,
-          { r: 64, g: 128, b: 255, a: 0.9 } as any,
+          { r: 255, g: 64, b: 64, a: 0.3 } as any,
+          { r: 255, g: 64, b: 64, a: 0.95 } as any,
           1,
         );
       }
