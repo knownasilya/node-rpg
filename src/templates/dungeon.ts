@@ -357,7 +357,7 @@ export const dungeonNodes: Node[] = [
     parentId: "actor-skeleton",
     position: { x: 4, y: 9999 },
     style: SLOT,
-    data: { targetTag: "player", aggroRange: 150 },
+    data: { targetTag: "player", aggroRange: 90 },
   },
   {
     id: "directionalAnimationModifier-skeleton",
@@ -485,7 +485,7 @@ export const dungeonNodes: Node[] = [
     parentId: "actor-slime",
     position: { x: 4, y: 9999 },
     style: SLOT,
-    data: { targetTag: "player", aggroRange: 130 },
+    data: { targetTag: "player", aggroRange: 80 },
   },
   {
     id: "directionalAnimationModifier-slime",
@@ -556,6 +556,93 @@ export const dungeonNodes: Node[] = [
       frameHeight: 16,
       margin: 0,
       spacing: 0,
+    },
+  },
+
+  // ---- Patrolling skeletons (vertical patrol, no chase) -----------------
+  // Not a .tmj object class, so these spawn from the template `instances`
+  // below (one Actor per entry). The Patrol modifier randomizes range/speed/
+  // phase per instance, so they don't bob in lockstep. Reuses the skeleton
+  // sheets already wired above.
+  {
+    id: "actor-skeleton-patrol",
+    type: "actor",
+    position: { x: 40, y: 1520 },
+    style: { width: 240 },
+    data: {
+      label: "skeleton (patrol)",
+      pos: { x: 416, y: 112 },
+      color: "gray",
+      collision: true,
+      tags: ["enemy", "skeleton-patrol"],
+      instances: [
+        { id: "sp1", x: 400, y: 96 },
+        { id: "sp2", x: 432, y: 160 },
+        { id: "sp3", x: 416, y: 224 },
+      ],
+    },
+  },
+  {
+    id: "patrolModifier-skeleton-patrol",
+    type: "patrolModifier",
+    parentId: "actor-skeleton-patrol",
+    position: { x: 4, y: 9999 },
+    style: SLOT,
+    data: {
+      speed: 34,
+      range: 48,
+      startDirection: "right",
+      pauseAtTurnMs: 250,
+      stayOnPlatform: false,
+      axis: "vertical",
+    },
+  },
+  {
+    id: "directionalAnimationModifier-skeleton-patrol",
+    type: "directionalAnimationModifier",
+    parentId: "actor-skeleton-patrol",
+    position: { x: 4, y: 9999 },
+    style: SLOT,
+    data: {
+      idleSheet: "spritesheet-skel-idle",
+      walkSheet: "spritesheet-skel-walk",
+      attackSheet: "",
+      frameDurationMs: 140,
+      attackEvent: "",
+      attackMs: 250,
+    },
+  },
+  {
+    id: "hurtboxModifier-skeleton-patrol",
+    type: "hurtboxModifier",
+    parentId: "actor-skeleton-patrol",
+    position: { x: 4, y: 9999 },
+    style: SLOT,
+    data: {
+      shapes: [{ x: -7, y: -7, w: 14, h: 14 }],
+      tags: ["enemy"],
+      iFrameMs: 250,
+    },
+  },
+  {
+    id: "healthModifier-skeleton-patrol",
+    type: "healthModifier",
+    parentId: "actor-skeleton-patrol",
+    position: { x: 4, y: 9999 },
+    style: SLOT,
+    data: { max: 2, onZero: "kill", emitEvent: "" },
+  },
+  {
+    id: "hitboxModifier-skeleton-patrol",
+    type: "hitboxModifier",
+    parentId: "actor-skeleton-patrol",
+    position: { x: 4, y: 9999 },
+    style: SLOT,
+    data: {
+      shapes: [{ x: -7, y: -7, w: 14, h: 14 }],
+      damage: 1,
+      targetTags: ["player"],
+      active: true,
     },
   },
 
@@ -693,6 +780,8 @@ export const dungeonEdges = [
   { id: "e-skel-s2", source: "actor-skeleton", target: "scene-2" },
   { id: "e-slime-s1", source: "actor-slime", target: "scene-1" },
   { id: "e-slime-s2", source: "actor-slime", target: "scene-2" },
+  // Patrolling skeletons (template instances) live in level 1.
+  { id: "e-skelpat-s1", source: "actor-skeleton-patrol", target: "scene-1" },
 
   // Stairs: down only in level 1, up only in level 2.
   { id: "e-stairs-s1", source: "actor-stairs", target: "scene-1" },

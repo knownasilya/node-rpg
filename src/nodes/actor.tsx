@@ -45,7 +45,14 @@ export default function ActorNode({ id, data }: NodeProps) {
 
   useEffect(() => {
     const relayout = () => {
-      const inputsH = inputsRef.current?.getBoundingClientRect().height ?? 0;
+      // getBoundingClientRect() is in screen pixels (scaled by the React Flow
+      // zoom), but child node positions are in flow coordinates. Divide by the
+      // zoom so modifier cards land directly below the body at any zoom level —
+      // otherwise, zoomed out, the under-measured body height places them too
+      // high and they overlap the instances list.
+      const zoom = reactFlow.getZoom?.() ?? 1;
+      const inputsH =
+        (inputsRef.current?.getBoundingClientRect().height ?? 0) / zoom;
       let y = inputsH + (children.length > 0 ? SLOT_GAP : 0);
       const updates: { id: string; pos: { x: number; y: number } }[] = [];
       let needsUpdate = false;
@@ -54,7 +61,8 @@ export default function ActorNode({ id, data }: NodeProps) {
         const el = document.querySelector(
           `.react-flow__node[data-id="${child.id}"]`
         ) as HTMLElement | null;
-        const h = el?.getBoundingClientRect().height ?? 60;
+        const rect = el?.getBoundingClientRect();
+        const h = rect ? rect.height / zoom : 60;
         const desired = { x: SLOT_X, y };
         const cur = child.position;
         if (
@@ -104,7 +112,9 @@ export default function ActorNode({ id, data }: NodeProps) {
 
   useEffect(() => {
     // Re-run layout when node positions change externally (e.g. drag stop)
-    const inputsH = inputsRef.current?.getBoundingClientRect().height ?? 0;
+    const zoom = reactFlow.getZoom?.() ?? 1;
+    const inputsH =
+      (inputsRef.current?.getBoundingClientRect().height ?? 0) / zoom;
     let y = inputsH + (children.length > 0 ? SLOT_GAP : 0);
     const updates: { id: string; pos: { x: number; y: number } }[] = [];
     let needsUpdate = false;
@@ -112,7 +122,8 @@ export default function ActorNode({ id, data }: NodeProps) {
       const el = document.querySelector(
         `.react-flow__node[data-id="${child.id}"]`
       ) as HTMLElement | null;
-      const h = el?.getBoundingClientRect().height ?? 60;
+      const rect = el?.getBoundingClientRect();
+      const h = rect ? rect.height / zoom : 60;
       const desired = { x: SLOT_X, y };
       const cur = child.position;
       if (

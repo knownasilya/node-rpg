@@ -168,10 +168,11 @@ const modifierDefaults: Record<string, Record<string, unknown>> = {
     range: 48,
     startDirection: "right",
     pauseAtTurnMs: 0,
+    axis: "horizontal",
   },
   chaseModifier: {
     targetTag: "player",
-    aggroRange: 120,
+    aggroRange: 90,
   },
   directionalAnimationModifier: {
     idleSheet: "",

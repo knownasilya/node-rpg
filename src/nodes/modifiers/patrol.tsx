@@ -29,13 +29,21 @@ export default function PatrolModifier({ id, data, parentId }: NodeProps) {
   const [stayOnPlatform, setStayOnPlatform] = useState<boolean>(
     (data.stayOnPlatform as boolean | undefined) ?? true,
   );
+  // Which axis to oscillate along. "horizontal" suits platformers (and keeps
+  // the ledge-guard); "vertical" is for top-down up/down patrols.
+  const [axis, setAxis] = useState<"horizontal" | "vertical">(
+    (data.axis as "horizontal" | "vertical" | undefined) ?? "horizontal",
+  );
+  const horizontal = axis === "horizontal";
 
   useEffect(() => {
     if (actors.length === 0) return;
     type PatrolState = {
-      homeX: number;
+      home: number;
       dir: 1 | -1;
       pausedUntil: number;
+      rangeI: number;
+      speedI: number;
     };
     const home = new Map<number, PatrolState>();
     const now0 = performance.now();
@@ -45,17 +53,18 @@ export default function PatrolModifier({ id, data, parentId }: NodeProps) {
       if (!a.get(RequestedHeadingComponent)) {
         a.addComponent(new RequestedHeadingComponent());
       }
-      // Desync instances: alternate the starting direction by index and
-      // stagger the first turn with a small random pause. Without this
-      // every instance traveled the same range at the same speed and
-      // flipped direction in lockstep — three slimes moved as one.
+      // Randomize each instance so a group of patrollers don't move in
+      // lockstep: alternate the base start direction by index, then jitter
+      // the range (±30%), speed (±25%), and the first-turn phase per actor.
       const flipParity = idx % 2 === 0 ? 1 : -1;
       const baseDir: 1 | -1 = startDirection === "left" ? -1 : 1;
       const dir = (flipParity === 1 ? baseDir : -baseDir) as 1 | -1;
       home.set(a.id, {
-        homeX: a.pos.x,
+        home: horizontal ? a.pos.x : a.pos.y,
         dir,
-        pausedUntil: now0 + Math.random() * 600,
+        pausedUntil: now0 + Math.random() * 800,
+        rangeI: Math.max(8, range * (0.7 + Math.random() * 0.6)),
+        speedI: Math.max(4, speed * (0.75 + Math.random() * 0.5)),
       });
     });
 
@@ -102,35 +111,43 @@ export default function PatrolModifier({ id, data, parentId }: NodeProps) {
         if (!state) continue;
         const motion = a.get(MotionComponent);
         const req = a.get(RequestedHeadingComponent);
-        const dx = a.pos.x - state.homeX;
-        // Flip when we step past the range. The pause window holds the
-        // direction at 0 (and clears vel.x) for a beat at each end.
-        if (dx >= range && state.dir === 1) {
+        // Distance from home along the active axis.
+        const d = (horizontal ? a.pos.x : a.pos.y) - state.home;
+        // Flip when we step past the per-instance range. The pause window
+        // holds the direction at 0 for a beat at each end.
+        if (d >= state.rangeI && state.dir === 1) {
           state.dir = -1;
           state.pausedUntil = now + pauseAtTurnMs;
-        } else if (dx <= -range && state.dir === -1) {
+        } else if (d <= -state.rangeI && state.dir === -1) {
           state.dir = 1;
           state.pausedUntil = now + pauseAtTurnMs;
         }
-        // Ledge guard: before committing to a step, peek under the foot
-        // we're about to plant. If there's no ground there, turn around
-        // immediately — otherwise the slime walks off and `range` only
-        // catches it well past the edge.
-        if (stayOnPlatform && now >= state.pausedUntil) {
+        // Ledge guard (horizontal/platformer only): before committing to a
+        // step, peek under the leading foot. If there's no ground there, turn
+        // around. Vertical/top-down patrols have no "ledge", so skip it.
+        if (horizontal && stayOnPlatform && now >= state.pausedUntil) {
           if (wouldFallOff(a as Actor, state.dir)) {
             state.dir = (state.dir * -1) as 1 | -1;
             state.pausedUntil = now + pauseAtTurnMs;
           }
         }
         const paused = now < state.pausedUntil;
-        const desired = paused ? 0 : state.dir * speed;
-        if (motion) motion.vel = vec(desired, motion.vel.y);
-        if (req)
-          req.heading = vec(paused ? 0 : state.dir, req.heading.y);
+        const v = paused ? 0 : state.dir * state.speedI;
+        const hdg = paused ? 0 : state.dir;
+        if (motion) {
+          motion.vel = horizontal
+            ? vec(v, motion.vel.y)
+            : vec(motion.vel.x, v);
+        }
+        if (req) {
+          req.heading = horizontal
+            ? vec(hdg, req.heading.y)
+            : vec(req.heading.x, hdg);
+        }
       }
     }, 1000 / 60);
     return () => clearInterval(intv);
-  }, [actorsKey, speed, range, startDirection, pauseAtTurnMs, stayOnPlatform]);
+  }, [actorsKey, speed, range, startDirection, pauseAtTurnMs, stayOnPlatform, axis]);
 
   return (
     <ModShell
@@ -138,8 +155,20 @@ export default function PatrolModifier({ id, data, parentId }: NodeProps) {
       data={data}
       accent="var(--accent-movement)"
       title="Patrol"
-      summary={`${speed}px/s ±${range}`}
+      summary={`${axis === "vertical" ? "↕" : "↔"} ${speed}px/s ±${range}`}
     >
+        <Field label="axis">
+          <select
+            className="nrpg-select"
+            value={axis}
+            onChange={(e) =>
+              setAxis(e.currentTarget.value as "horizontal" | "vertical")
+            }
+          >
+            <option value="horizontal">horizontal</option>
+            <option value="vertical">vertical</option>
+          </select>
+        </Field>
         <Field label="speed">
           <input
             type="number"

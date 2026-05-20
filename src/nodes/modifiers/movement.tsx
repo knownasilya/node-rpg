@@ -6,7 +6,7 @@ import {
   MovementStyle,
   RequestedHeadingComponent,
 } from "./ecs";
-import { useParentActor } from "./shared";
+import { useParentActors } from "./shared";
 
 const STYLES: MovementStyle[] = [
   "velocity",
@@ -15,7 +15,11 @@ const STYLES: MovementStyle[] = [
 ];
 
 export default function MovementModifier({ id, data, parentId }: NodeProps) {
-  const actor = useParentActor(parentId);
+  // Attach to EVERY instance (plural) — a .tmj-projected enemy spawns one
+  // Actor per object, and each needs its own MovementComponent or only the
+  // primary instance would move (e.g. chase). Mirrors hurtbox/health/chase.
+  const actors = useParentActors(parentId);
+  const actorsKey = actors.map((a) => a.id).join(",");
   const [style, setStyle] = useState<MovementStyle>(
     (data.style as MovementStyle | undefined) ?? "velocity",
   );
@@ -30,35 +34,32 @@ export default function MovementModifier({ id, data, parentId }: NodeProps) {
   );
 
   useEffect(() => {
-    if (!actor) return;
-
-    // MovementSystem expects RequestedHeadingComponent on the same entity;
-    // attach a default if no Input modifier already did.
-    if (!actor.get(RequestedHeadingComponent)) {
-      actor.addComponent(new RequestedHeadingComponent());
+    if (actors.length === 0) return;
+    for (const actor of actors) {
+      // MovementSystem expects RequestedHeadingComponent on the same entity;
+      // attach a default if no Input modifier already did.
+      if (!actor.get(RequestedHeadingComponent)) {
+        actor.addComponent(new RequestedHeadingComponent());
+      }
+      const existing = actor.get(MovementComponent);
+      if (existing) {
+        existing.style = style;
+        existing.speed = speed;
+        existing.tickMs = tickMs;
+        existing.cellSize = cellSize;
+        existing.accumulator = 0;
+        existing.latchedHeading.x = 0;
+        existing.latchedHeading.y = 0;
+      } else {
+        actor.addComponent(new MovementComponent(style, speed, tickMs, cellSize));
+      }
     }
-
-    const existing = actor.get(MovementComponent);
-    if (existing) {
-      existing.style = style;
-      existing.speed = speed;
-      existing.tickMs = tickMs;
-      existing.cellSize = cellSize;
-      existing.accumulator = 0;
-      existing.latchedHeading.x = 0;
-      existing.latchedHeading.y = 0;
-    } else {
-      actor.addComponent(
-        new MovementComponent(style, speed, tickMs, cellSize),
-      );
-    }
-
     return () => {
-      if (actor.get(MovementComponent)) {
-        actor.removeComponent(MovementComponent);
+      for (const actor of actors) {
+        if (actor.get(MovementComponent)) actor.removeComponent(MovementComponent);
       }
     };
-  }, [actor, style, speed, tickMs, cellSize]);
+  }, [actorsKey, style, speed, tickMs, cellSize]);
 
   const showTick = style !== "velocity";
   const showCell = style === "grid-step";
