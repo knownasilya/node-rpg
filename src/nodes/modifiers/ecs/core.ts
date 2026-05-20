@@ -274,11 +274,15 @@ function applyRule(actor: Actor, other: Actor, rule: CollisionRule): void {
     case "emitEvent": {
       const name = (rule.emitEventName ?? "").trim();
       if (!name) return;
-      emit(name, {
-        ...(rule.emitEventPayload ?? {}),
-        self: actor,
-        other,
-      });
+      emit(
+        name,
+        {
+          ...(rule.emitEventPayload ?? {}),
+          self: actor,
+          other,
+        },
+        "collisionRule",
+      );
       break;
     }
     case "damage": {

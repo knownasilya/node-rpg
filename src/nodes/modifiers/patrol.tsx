@@ -2,8 +2,13 @@ import { NodeProps } from "@xyflow/react";
 import { Actor, MotionComponent, TileMap, vec } from "excalibur";
 import { useEffect, useState } from "preact/hooks";
 import { Field, ModShell, Toggle } from "../../ui";
-import { RequestedHeadingComponent } from "./ecs";
+import { KnockbackComponent, RequestedHeadingComponent } from "./ecs";
 import { useParentActors } from "./shared";
+import { StateChartComponent } from "./stateChart";
+
+// While the actor's State Chart (if any) is in one of these states, patrol
+// freezes — e.g. the NPC holds still mid-conversation. No chart ⇒ never frozen.
+const FREEZE_STATE = /talking|paused|dialog/i;
 
 // Simple horizontal patrol AI. Each actor remembers the x it was spawned
 // at and oscillates between `home.x - range` and `home.x + range` at
@@ -58,6 +63,9 @@ export default function PatrolModifier({ id, data, parentId }: NodeProps) {
       pausedUntil: number;
       rangeI: number;
       speedI: number;
+      // Tracks whether this instance was chasing last tick, so we only fire
+      // see-target / lost-target on the actual edge.
+      chasingPrev: boolean;
     };
     const home = new Map<number, PatrolState>();
     const now0 = performance.now();
@@ -79,6 +87,7 @@ export default function PatrolModifier({ id, data, parentId }: NodeProps) {
         pausedUntil: now0 + Math.random() * 800,
         rangeI: Math.max(8, range * (0.7 + Math.random() * 0.6)),
         speedI: Math.max(4, speed * (0.75 + Math.random() * 0.5)),
+        chasingPrev: false,
       });
     });
 
@@ -125,6 +134,20 @@ export default function PatrolModifier({ id, data, parentId }: NodeProps) {
         if (!state) continue;
         const motion = a.get(MotionComponent);
         const req = a.get(RequestedHeadingComponent);
+        // Don't fight an active knockback impulse — let KnockbackSystem drive
+        // the velocity for the push window.
+        const kb = a.get(KnockbackComponent);
+        if (kb && kb.until > now) continue;
+        // Freeze patrol while the actor's State Chart (if any) is talking/paused.
+        const chart = a.get(StateChartComponent);
+        if (chart && FREEZE_STATE.test(chart.current)) {
+          if (motion) {
+            motion.vel = horizontal
+              ? vec(0, motion.vel.y)
+              : vec(motion.vel.x, 0);
+          }
+          continue;
+        }
         // Directional vision: chase a `chaseTag` target only if it's within
         // sightRange AND inside the cone the patroller is currently facing
         // (i.e. the way it's walking). Outside the cone it stays oblivious.
@@ -158,7 +181,18 @@ export default function PatrolModifier({ id, data, parentId }: NodeProps) {
             const len = Math.hypot(ox, oy) || 1;
             if (motion) motion.vel = vec((ox / len) * state.speedI, (oy / len) * state.speedI);
             if (req) req.heading = vec(ox / len, oy / len);
+            // Edge-triggered: notify the chart it just spotted the target so an
+            // author's chart can switch to a "chasing" state (drives bubbles/anim).
+            if (!state.chasingPrev) {
+              chart?.send("see-target");
+              state.chasingPrev = true;
+            }
             continue;
+          }
+          // Target left sight (or none) — fire the lost edge once.
+          if (state.chasingPrev) {
+            chart?.send("lost-target");
+            state.chasingPrev = false;
           }
         }
         // Distance from home along the active axis.

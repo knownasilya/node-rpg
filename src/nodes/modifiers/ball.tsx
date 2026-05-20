@@ -80,10 +80,10 @@ export default function BallModifier({ id, data, parentId }: NodeProps) {
           ball.vel = vec(vx, vyDir * vyMag);
           if (b) ball.pos = vec(ball.pos.x, vyDir < 0 ? b.top - 7 : b.bottom + 7);
         } else if (other.hasTag("left")) {
-          if (rightEvent.trim()) emit(rightEvent.trim(), { ball });
+          if (rightEvent.trim()) emit(rightEvent.trim(), { ball }, id);
           reset(1);
         } else if (other.hasTag("right")) {
-          if (leftEvent.trim()) emit(leftEvent.trim(), { ball });
+          if (leftEvent.trim()) emit(leftEvent.trim(), { ball }, id);
           reset(-1);
         }
       };

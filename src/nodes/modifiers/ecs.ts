@@ -39,11 +39,13 @@ export {
   HurtboxComponent,
   type OnZero,
   HealthComponent,
+  KnockbackComponent,
   PlatformerMovementSystem,
   GravitySystem,
   JumpSystem,
   CameraFollowSystem,
   HitboxSystem,
+  KnockbackSystem,
   HitboxDebugSystem,
 } from "./ecs/platformer";
 

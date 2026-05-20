@@ -75,7 +75,11 @@ export default function WaveSpawnerNode({ id, data }: NodeProps) {
   const enemyNodeH = enemyNode?.data?.height as number | undefined;
   const enemyKey = JSON.stringify([enemyNodeId, enemyTags, enemyColorName, enemyCollision, enemyNodeW, enemyNodeH]);
 
-  const sceneId = (data.sceneId as string | undefined) ?? "";
+  // Which scene this spawner runs in. Preferred: an outgoing edge to a
+  // scene-* node (drag a wire from the spawner to the scene, like Actors do).
+  // Falls back to the legacy `sceneId` text field for older graphs.
+  const sceneEdge = edges.find((e) => e.source === id && e.target.startsWith("scene-"));
+  const sceneId = sceneEdge?.target ?? ((data.sceneId as string | undefined) ?? "");
   const pathFrom = (data.pathFrom as string | undefined) ?? "";
   const enemySheet = (data.enemySheet as string | undefined) ?? "";
   const enemyFrames = (data.enemyFrames as number[] | undefined) ?? [0, 4, 8, 12];
@@ -255,7 +259,7 @@ export default function WaveSpawnerNode({ id, data }: NodeProps) {
               bhp.current = Math.max(0, bhp.current - baseDamage);
               if (bhp.current <= 0 && !gameOverSent && gameOverEvent.trim()) {
                 gameOverSent = true;
-                emit(gameOverEvent.trim(), { base });
+                emit(gameOverEvent.trim(), { base }, id);
               }
             }
             try {
@@ -273,9 +277,9 @@ export default function WaveSpawnerNode({ id, data }: NodeProps) {
         creepsRef.current = [];
         waveRef.current++;
         if (waveRef.current < waves) {
-          if (waveClearedEvent.trim()) emit(waveClearedEvent.trim(), { wave: waveRef.current });
+          if (waveClearedEvent.trim()) emit(waveClearedEvent.trim(), { wave: waveRef.current }, id);
         } else {
-          if (levelClearedEvent.trim()) emit(levelClearedEvent.trim(), {});
+          if (levelClearedEvent.trim()) emit(levelClearedEvent.trim(), {}, id);
         }
       }
     }, 1000 / 60);
@@ -311,10 +315,17 @@ export default function WaveSpawnerNode({ id, data }: NodeProps) {
             ? `enemy: ${(enemyNode.data?.label as string) ?? enemyNode.id}`
             : "enemy: (connect an Actor node →)"}
         </div>
-        <Field label="scene id">
-          <input type="text" className="nrpg-input" style={{ width: 120, textAlign: "left" }}
-            value={sceneId} onChange={(e) => set("sceneId", e.currentTarget.value)} />
-        </Field>
+        {sceneEdge ? (
+          <div style={{ fontSize: 10, color: "var(--text-muted)" }}>
+            scene: {(allNodes.find((n) => n.id === sceneEdge.target)?.data?.label as string) ?? sceneEdge.target}
+          </div>
+        ) : (
+          <Field label="scene id">
+            <input type="text" className="nrpg-input" style={{ width: 120, textAlign: "left" }}
+              value={sceneId} onChange={(e) => set("sceneId", e.currentTarget.value)}
+              placeholder="(or wire to a scene →)" />
+          </Field>
+        )}
         <Field label="path from">
           <select className="nrpg-select" value={pathFrom} onChange={(e) => set("pathFrom", e.currentTarget.value)}>
             <option value="">(inline)</option>

@@ -14,6 +14,7 @@ import { useGame } from "../App";
 import { Button, Field, NodeBody, NodeCard, NodeHeader } from "../ui";
 import {
   on,
+  getCurrentState,
   useHitboxDebug,
   useCurrentState,
   usePoints,
@@ -26,6 +27,10 @@ import { HealthComponent } from "./modifiers/ecs";
 export default function Game({ id, data }: NodeProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const placeholderRef = useRef<HTMLDivElement>(null);
+  // HUD scale published to docked overlays (toolbar). Read inside the rAF tick
+  // (whose closure would otherwise capture a stale zoom), so keep it on a ref
+  // updated every render.
+  const scaleRef = useRef(1);
   const game = useGame();
   const nodes = useNodes();
   const reactFlow = useReactFlow();
@@ -187,6 +192,7 @@ export default function Game({ id, data }: NodeProps) {
   // or window resizes.
   const viewport = useViewport();
   const viewportKey = `${viewport.x}|${viewport.y}|${viewport.zoom}`;
+  scaleRef.current = playMode ? 1 : viewport.zoom;
   useEffect(() => {
     const sync = () => {
       const el = placeholderRef.current;
@@ -248,16 +254,20 @@ export default function Game({ id, data }: NodeProps) {
     {},
   );
   const counterKey = counterNodes
-    .map((n) => `${n.id}:${(n.data?.eventName as string | undefined) ?? ""}:${(n.data?.resetEventName as string | undefined) ?? ""}`)
+    .map((n) => `${n.id}:${(n.data?.eventName as string | undefined) ?? ""}:${(n.data?.resetEventName as string | undefined) ?? ""}:${((n.data?.stopStates as string[] | undefined) ?? []).join(",")}`)
     .join("|");
   useEffect(() => {
     const unsubs: Array<() => void> = [];
     for (const n of counterNodes) {
       const eventName = ((n.data?.eventName as string | undefined) ?? "").trim();
       const resetEvent = ((n.data?.resetEventName as string | undefined) ?? "").trim();
+      const stopStates = (n.data?.stopStates as string[] | undefined) ?? [];
       if (!eventName) continue;
       unsubs.push(
         on(eventName, () => {
+          // Freeze the count while the state machine sits in a "stop" state
+          // (e.g. GAME_OVER) so late events don't bump the score.
+          if (stopStates.includes(getCurrentState().name)) return;
           setCounterCounts((c) => ({ ...c, [n.id]: (c[n.id] ?? 0) + 1 }));
         }),
       );
@@ -313,7 +323,7 @@ export default function Game({ id, data }: NodeProps) {
       if (canvas) {
         const r = canvas.getBoundingClientRect();
         if (r.width > 0 && r.height > 0)
-          setGameRect({ x: r.left, y: r.top, w: r.width, h: r.height });
+          setGameRect({ x: r.left, y: r.top, w: r.width, h: r.height, scale: scaleRef.current });
       }
       requestAnimationFrame(tick);
     };
@@ -482,15 +492,22 @@ export default function Game({ id, data }: NodeProps) {
                 text: string;
                 color: string;
               };
-              const pills: Pill[] = counterNodes.map((n) => ({
-                key: n.id,
-                anchor:
-                  ((n.data?.anchor as Pill["anchor"] | undefined) ??
-                    "top-left"),
-                text: `${(n.data?.label as string | undefined) ?? "Counter"}: ${counterCounts[n.id] ?? 0}`,
-                color:
-                  (n.data?.color as string | undefined) ?? "#ffd700",
-              }));
+              const pills: Pill[] = counterNodes
+                .filter(
+                  (n) =>
+                    !((n.data?.hideStates as string[] | undefined) ?? []).includes(
+                      machineState.name,
+                    ),
+                )
+                .map((n) => ({
+                  key: n.id,
+                  anchor:
+                    ((n.data?.anchor as Pill["anchor"] | undefined) ??
+                      "top-left"),
+                  text: `${(n.data?.label as string | undefined) ?? "Counter"}: ${counterCounts[n.id] ?? 0}`,
+                  color:
+                    (n.data?.color as string | undefined) ?? "#ffd700",
+                }));
               if (machineState.name) {
                 pills.push({
                   key: "__state",
@@ -535,38 +552,45 @@ export default function Game({ id, data }: NodeProps) {
                 "bottom-right": [],
               };
               for (const p of pills) groups[p.anchor].push(p);
+              // Scale the HUD with the editor's zoom so the overlay tracks the
+              // game canvas (which is sized by the zoomed placeholder rect)
+              // instead of staying a fixed screen size and ballooning when you
+              // zoom out. In fullscreen play mode there's no React Flow zoom.
+              const hudScale = playMode ? 1 : viewport.zoom;
+              const px = (n: number) => n * hudScale;
               const containerFor = (anchor: Pill["anchor"]) => {
                 const s: Record<string, any> = {
                   position: "absolute",
                   display: "flex",
                   flexDirection: "row",
-                  gap: 6,
+                  gap: px(6),
                   pointerEvents: "none",
                 };
                 if (anchor === "top-left") {
-                  s.top = 8;
-                  s.left = 8;
+                  s.top = px(8);
+                  s.left = px(8);
                 } else if (anchor === "top-right") {
-                  s.top = 8;
-                  s.right = 8;
+                  s.top = px(8);
+                  s.right = px(8);
                 } else if (anchor === "bottom-left") {
-                  s.bottom = 8;
-                  s.left = 8;
+                  s.bottom = px(8);
+                  s.left = px(8);
                 } else {
-                  s.bottom = 8;
-                  s.right = 8;
+                  s.bottom = px(8);
+                  s.right = px(8);
                 }
                 return s;
               };
               const pillStyle = (color: string): Record<string, any> => ({
-                padding: "4px 8px",
+                padding: `${px(3)}px ${px(6)}px`,
                 background: "rgba(0, 0, 0, 0.55)",
                 color,
                 fontFamily: "ui-monospace, monospace",
-                fontSize: 14,
+                fontSize: px(11),
                 fontWeight: 700,
-                borderRadius: 4,
+                borderRadius: px(3),
                 textShadow: "0 1px 2px rgba(0,0,0,0.6)",
+                whiteSpace: "nowrap",
               });
               return (Object.keys(groups) as Pill["anchor"][])
                 .filter((anchor) => groups[anchor].length > 0)

@@ -147,10 +147,10 @@ export default function PathFollowModifier({ id, data, parentId }: NodeProps) {
               hp.current = Math.max(0, hp.current - baseDamage);
               if (hp.current <= 0 && !gameOverSent && gameOverEvent.trim()) {
                 gameOverSent = true;
-                emit(gameOverEvent.trim(), { base });
+                emit(gameOverEvent.trim(), { base }, id);
               }
             }
-            if (endEvent.trim()) emit(endEvent.trim(), { actor: a });
+            if (endEvent.trim()) emit(endEvent.trim(), { actor: a }, id);
             try {
               a.kill();
             } catch {}
@@ -167,7 +167,7 @@ export default function PathFollowModifier({ id, data, parentId }: NodeProps) {
       // Wave cleared: every creep has either been killed or reached the base.
       if (!clearedSent && clearedEvent.trim() && resolved.size >= actors.length) {
         clearedSent = true;
-        emit(clearedEvent.trim(), {});
+        emit(clearedEvent.trim(), {}, id);
       }
     }, 1000 / 60);
     return () => {

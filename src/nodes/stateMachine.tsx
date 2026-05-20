@@ -2,7 +2,8 @@ import { Handle, NodeProps, Position, useReactFlow } from "@xyflow/react";
 import { useEffect, useState } from "preact/hooks";
 import { Field, NodeBody, NodeCard, NodeHeader } from "../ui";
 import { useGame } from "../App";
-import { emit, on, setCurrentState } from "./modifiers/shared";
+import { setCurrentState } from "./modifiers/shared";
+import { runChart, type StateDef, type Transition } from "./modifiers/chartRuntime";
 
 // General finite state machine. Define named `states` and `transitions`
 // (from → to, fired by an event, a key, and/or a timer). On entering a state
@@ -17,16 +18,6 @@ import { emit, on, setCurrentState } from "./modifiers/shared";
 //   states?: { name, hint?, enterEvent? }[]   // per-state HUD hint + on-enter event
 //   transitions: { from, to, event?, key?, ms?, emit? }[]
 
-type StateDef = { name: string; hint?: string; enterEvent?: string };
-type Transition = {
-  from: string;
-  to: string;
-  event?: string;
-  key?: string;
-  ms?: number;
-  emit?: string;
-};
-
 export default function StateMachineNode({ id, data }: NodeProps) {
   const reactFlow = useReactFlow();
   const game = useGame();
@@ -39,70 +30,21 @@ export default function StateMachineNode({ id, data }: NodeProps) {
 
   useEffect(() => {
     if (!initial) return;
-    let disposed = false;
-    const cleanups: Array<() => void> = [];
-    let countdown: ReturnType<typeof setInterval> | null = null;
-    const stateOf = (name: string) => states.find((s) => s.name === name);
-
-    const enter = (name: string) => {
-      if (disposed) return;
-      setCurrent(name);
-      const def = stateOf(name);
-      const baseHint = def?.hint ?? "";
-      setCurrentState(name, baseHint);
-      if (def?.enterEvent?.trim()) emit(def.enterEvent.trim(), { state: name });
-      // Tear down the previous state's armed triggers.
-      while (cleanups.length) cleanups.pop()!();
-      if (countdown) {
-        clearInterval(countdown);
-        countdown = null;
-      }
-      let moved = false;
-      const fire = (t: Transition) => {
-        if (moved) return; // first transition to fire wins
-        moved = true;
-        if (t.emit?.trim()) emit(t.emit.trim(), { from: name, to: t.to });
-        enter(t.to);
-      };
-      const active = transitions.filter((t) => t.from === name || t.from === "*");
-      let soonest = Infinity;
-      for (const t of active) {
-        if (t.key) {
-          const h = (e: KeyboardEvent) => {
-            if (e.code === t.key || e.key === t.key) fire(t);
-          };
-          window.addEventListener("keydown", h);
-          cleanups.push(() => window.removeEventListener("keydown", h));
-        }
-        if (t.event?.trim()) {
-          cleanups.push(on(t.event.trim(), () => fire(t)));
-        }
-        if (t.ms && t.ms > 0) {
-          const to = setTimeout(() => fire(t), t.ms);
-          cleanups.push(() => clearTimeout(to));
-          soonest = Math.min(soonest, t.ms);
-        }
-      }
-      // Live countdown to the soonest timed transition.
-      if (soonest !== Infinity) {
-        const deadline = performance.now() + soonest;
-        const tick = () => {
-          const left = Math.max(0, Math.ceil((deadline - performance.now()) / 1000));
-          setCurrentState(name, baseHint ? `${baseHint} · ${left}s` : `${left}s`);
-        };
-        tick();
-        countdown = setInterval(tick, 250);
-      }
-    };
-
-    const unsubReset = resetEvent.trim() ? on(resetEvent.trim(), () => enter(initial)) : () => {};
-    enter(initial);
-    return () => {
-      disposed = true;
-      while (cleanups.length) cleanups.pop()!();
-      if (countdown) clearInterval(countdown);
-      unsubReset();
-    };
+    // Drive the shared chart runner. The two original side effects — update
+    // the card's local "current:" line and publish to the global HUD store —
+    // happen in onState, which the runner also calls on each countdown tick
+    // (with the `· Ns` hint), preserving the live countdown.
+    const handle = runChart(
+      { initial, resetEvent, states, transitions },
+      {
+        source: id,
+        onState: (name, hint) => {
+          setCurrent(name);
+          setCurrentState(name, hint);
+        },
+      },
+    );
+    return () => handle.dispose();
     // game.resetTick: re-enter the initial state when the game is reset, so
     // the ↻ reset / play buttons always return to the starting state.
   }, [key, game.resetTick]);

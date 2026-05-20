@@ -6,7 +6,7 @@ import {
 } from "@xyflow/react";
 import { useEffect, useState } from "preact/hooks";
 import { Field, NodeBody, NodeCard, NodeHeader } from "../ui";
-import { on } from "./modifiers/shared";
+import { getCurrentState, on } from "./modifiers/shared";
 
 // Counter node: subscribes to a named event on the global event bus and
 // counts how many times it fires. The Game node renders the actual on-
@@ -33,6 +33,12 @@ export default function CounterNode({ id, data }: NodeProps) {
   const [color, setColor] = useState<string>(
     (data.color as string | undefined) ?? "#ffd700",
   );
+  // State-machine states on which the counter freezes (ignores its event) and
+  // hides its overlay. Stored as arrays; edited as comma-separated lists. The
+  // actual on-screen overlay lives in game.tsx, which honors the same fields.
+  const stopStates = (data.stopStates as string[] | undefined) ?? [];
+  const hideStates = (data.hideStates as string[] | undefined) ?? [];
+  const stopStatesKey = stopStates.join(",");
   const [count, setCount] = useState(0);
 
   // Local count display in the editor card — game.tsx renders the actual
@@ -40,7 +46,10 @@ export default function CounterNode({ id, data }: NodeProps) {
   useEffect(() => {
     const trimmedEvent = eventName.trim();
     if (!trimmedEvent) return;
-    const unsubEvent = on(trimmedEvent, () => setCount((c) => c + 1));
+    const unsubEvent = on(trimmedEvent, () => {
+      if (stopStates.includes(getCurrentState().name)) return;
+      setCount((c) => c + 1);
+    });
     const trimmedReset = resetEventName.trim();
     const unsubReset = trimmedReset
       ? on(trimmedReset, () => setCount(0))
@@ -49,7 +58,7 @@ export default function CounterNode({ id, data }: NodeProps) {
       unsubEvent();
       unsubReset();
     };
-  }, [eventName, resetEventName]);
+  }, [eventName, resetEventName, stopStatesKey]);
 
   return (
     <NodeCard accent="game" style={{ minWidth: 240 }}>
@@ -104,6 +113,42 @@ export default function CounterNode({ id, data }: NodeProps) {
                 resetEventName: e.currentTarget.value,
               });
             }}
+          />
+        </Field>
+        <Field label="stop on states">
+          <input
+            type="text"
+            className="nrpg-input"
+            style={{ width: 140, textAlign: "left" }}
+            value={stopStates.join(",")}
+            placeholder="e.g. GAME_OVER"
+            title="Comma-separated state names that freeze counting"
+            onChange={(e) =>
+              reactFlow.updateNodeData(id, {
+                stopStates: e.currentTarget.value
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter(Boolean),
+              })
+            }
+          />
+        </Field>
+        <Field label="hide on states">
+          <input
+            type="text"
+            className="nrpg-input"
+            style={{ width: 140, textAlign: "left" }}
+            value={hideStates.join(",")}
+            placeholder="e.g. GAME_OVER"
+            title="Comma-separated state names that hide the overlay"
+            onChange={(e) =>
+              reactFlow.updateNodeData(id, {
+                hideStates: e.currentTarget.value
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter(Boolean),
+              })
+            }
           />
         </Field>
         <Field label="anchor">

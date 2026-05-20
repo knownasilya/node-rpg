@@ -32,7 +32,6 @@ function waveSpawner(idScene: string, scene: string, pathFrom: string, waves: nu
       // (actor-enemy) and its child modifiers; the spawner owns the
       // escalating HP / speed / count below.
       label: `waves ${idScene}`,
-      sceneId: scene,
       pathFrom,
       waves,
       count0: 5,
@@ -279,6 +278,7 @@ export const towerDefenseNodes: Node[] = [
       states: [
         { name: "BUILD", hint: "place towers", enterEvent: "build-phase" },
         { name: "ATTACK", hint: "defend!", enterEvent: "attack-phase" },
+        { name: "GAME_OVER", hint: "the base fell", enterEvent: "" },
       ],
       transitions: [
         // Build -> Attack: auto after 15s, or early via READY ("ready") / SPACE.
@@ -288,6 +288,9 @@ export const towerDefenseNodes: Node[] = [
         // After the final wave the spawner emits level-cleared: reset to build
         // (the sceneSwitch advances to the next level in parallel).
         { from: "*", to: "BUILD", event: "level-cleared" },
+        // Base destroyed -> terminal GAME_OVER (freezes/hides the kill counter).
+        // Only "td-restart" (resetEvent) leaves it, back to the initial BUILD.
+        { from: "*", to: "GAME_OVER", event: "td-game-over" },
       ],
     },
   },
@@ -323,7 +326,16 @@ export const towerDefenseNodes: Node[] = [
     id: "counter-kills",
     type: "counter",
     position: { x: 2860, y: 40 },
-    data: { label: "Kills", eventName: "enemy-killed", resetEventName: "", anchor: "top-left", color: "#ffe066" },
+    data: {
+      label: "Kills",
+      eventName: "enemy-killed",
+      resetEventName: "td-restart",
+      anchor: "top-left",
+      color: "#ffe066",
+      // Freeze and hide the score once the base falls (GAME_OVER state).
+      stopStates: ["GAME_OVER"],
+      hideStates: ["GAME_OVER"],
+    },
   },
   {
     id: "graphicGroup-gameover",
@@ -408,10 +420,10 @@ export const towerDefenseEdges = [
   { id: "e-enemy-wave-l2", source: "actor-enemy", target: "waveSpawner-l2" },
   // Level 1 entities -> scene-1.
   { id: "e-base-l1-s1", source: "actor-base-l1", target: "scene-1" },
-  { id: "e-wave-l1-g1", source: "waveSpawner-l1", target: "game-1" },
+  { id: "e-wave-l1-s1", source: "waveSpawner-l1", target: "scene-1" },
   // Level 2 entities -> scene-2.
   { id: "e-base-l2-s2", source: "actor-base-l2", target: "scene-2" },
-  { id: "e-wave-l2-g1", source: "waveSpawner-l2", target: "game-1" },
+  { id: "e-wave-l2-s2", source: "waveSpawner-l2", target: "scene-2" },
   // Scenes -> Game.
   { id: "e-s1-g1", source: "scene-1", target: "game-1" },
   { id: "e-s2-g1", source: "scene-2", target: "game-1" },

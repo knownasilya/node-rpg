@@ -10,6 +10,12 @@ import {
 import { emit, useParentActors } from "./shared";
 import { PlayerAnimationStateComponent as AnimationComponent } from "./animation";
 import { getActorFacing } from "./directionalAnimation";
+import { StateChartComponent } from "./stateChart";
+
+// While the actor's State Chart (if any) is in one of these states, the attack
+// is suppressed — e.g. you can't swing mid-conversation. Matched by name so an
+// author opts in just by naming a chart state. No chart ⇒ never suppressed.
+const NO_ATTACK_STATE = /talking|menu|cutscene|dialog/i;
 
 // How the swing hitbox is placed each attack:
 //   facing    – platformer-style box in front, mirrored left/right via the
@@ -162,7 +168,11 @@ export default function AttackModifier({ id, data, parentId }: NodeProps) {
       // Match Excalibur Keys by event.code where possible. Keys values are
       // already strings like "KeyX" so a direct compare works.
       if (e.code !== String(keyName) && e.key !== String(keyName)) return;
-      for (const a of actors) beginSwing(a);
+      for (const a of actors) {
+        const chart = a.get(StateChartComponent);
+        if (chart && NO_ATTACK_STATE.test(chart.current)) continue;
+        beginSwing(a);
+      }
     };
     window.addEventListener("keydown", keyHandler);
     return () => {

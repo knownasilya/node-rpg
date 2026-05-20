@@ -115,6 +115,12 @@ export interface BoxShape {
 }
 
 export class HitboxComponent extends Component {
+  // Intended swing direction (unit vector), stamped by the Attack modifier each
+  // swing. Used to drive *directional* knockback — the victim is shoved the way
+  // the attack points, not just radially from the attacker. (0,0) = unset, in
+  // which case knockback falls back to the attacker→victim radial direction.
+  dirX = 0;
+  dirY = 0;
   constructor(
     public shapes: BoxShape[] = [],
     public damage: number = 1,
@@ -132,9 +138,24 @@ export class HurtboxComponent extends Component {
     public shapes: BoxShape[] = [],
     public tags: string[] = [],
     public iFrameMs: number = 300,
+    // Optional knockback: when this hurtbox is hit, the owner is pushed away
+    // from the attacker at `knockback` px/s for `knockbackMs`. 0 disables it
+    // (the default — existing actors are unaffected).
+    public knockback: number = 0,
+    public knockbackMs: number = 150,
   ) {
     super();
   }
+}
+
+// Transient impulse driving an actor away from an attacker after a hit.
+// Set by HitboxSystem, applied (and decayed) by KnockbackSystem, which runs
+// after MovementSystem so it overrides the heading-driven velocity for the
+// window. Zero-arg ctor for Excalibur's component system.
+export class KnockbackComponent extends Component {
+  vx = 0;
+  vy = 0;
+  until = 0;
 }
 
 export type OnZero = "kill" | "respawn" | "emit";
@@ -366,7 +387,7 @@ export class GroundedSystem extends System {
       if (grounded) {
         gc.lastGroundedAt = now;
         if (!wasGrounded && gc.emitTag) {
-          emit(`${gc.emitTag}-grounded`, { actor });
+          emit(`${gc.emitTag}-grounded`, { actor }, "GroundSystem");
         }
       }
     }
@@ -409,7 +430,7 @@ export class JumpSystem extends System {
         if (canJump) {
           motion.vel = vec(motion.vel.x, -jc.jumpVelocity);
           jc.jumpsUsed++;
-          if (jc.emitTag) emit(`${jc.emitTag}-jumped`, { actor: e });
+          if (jc.emitTag) emit(`${jc.emitTag}-jumped`, { actor: e }, "JumpSystem");
         } else {
           jc.bufferedUntil = now + jc.bufferMs;
         }
@@ -563,8 +584,36 @@ export class HitboxSystem extends System {
         if (!died && !alreadyDead && anim?.pin) {
           anim.pin("hurt", vb.iFrameMs);
         }
+        // Knockback: shove the (surviving) victim away from the attacker. Skip
+        // on the killing blow so the death animation plays in place.
+        if (vb.knockback > 0 && !died && !alreadyDead) {
+          let dx = vat.pos.x - hat.pos.x;
+          let dy = vat.pos.y - hat.pos.y;
+          const len = Math.hypot(dx, dy);
+          if (len < 0.0001) {
+            dx = 0;
+            dy = -1; // degenerate (stacked) — push straight up
+          } else {
+            dx /= len;
+            dy /= len;
+          }
+          let kb = va.get(KnockbackComponent);
+          if (!kb) {
+            kb = new KnockbackComponent();
+            va.addComponent(kb);
+          }
+          kb.vx = dx * vb.knockback;
+          kb.vy = dy * vb.knockback;
+          kb.until = now + vb.knockbackMs;
+          // Apply immediately too (this system runs after MovementSystem, so it
+          // wins for this frame as well).
+          try {
+            const motion = (va as any).get?.(MotionComponent);
+            if (motion) motion.vel = vec(kb.vx, kb.vy);
+          } catch {}
+        }
         vb.invincibleUntil = now + vb.iFrameMs;
-        emit("damage-dealt", { attacker: ha, victim: va, amount: hb.damage });
+        emit("damage-dealt", { attacker: ha, victim: va, amount: hb.damage }, "HitboxSystem");
         // Record the contact point (victim center) so the debug overlay can
         // flash a spark there. Cap the buffer so it can't grow unbounded.
         if (getHitboxDebug()) {
@@ -680,6 +729,29 @@ export class HitboxDebugSystem extends System {
   }
 }
 
+// Applies the transient knockback impulse, overriding heading-driven velocity
+// while the window is open. Priority 85 runs after MovementSystem (-50) and
+// HitboxSystem (80), so the push wins for the frame; Excalibur's physics then
+// integrates it (and resolves wall collisions) like any other velocity.
+export class KnockbackSystem extends System {
+  static priority = 85;
+  systemType = SystemType.Update;
+  query: Query<typeof KnockbackComponent | typeof MotionComponent>;
+  constructor(public world: World) {
+    super();
+    this.query = world.query([KnockbackComponent, MotionComponent]);
+  }
+  update(): void {
+    const now = performance.now();
+    for (const e of this.query.entities) {
+      const kb = e.get(KnockbackComponent);
+      const motion = e.get(MotionComponent);
+      if (!kb || !motion || kb.until <= now) continue;
+      motion.vel = vec(kb.vx, kb.vy);
+    }
+  }
+}
+
 export function registerPlatformerSystems(scene: Scene): void {
   scene.world.add(PlatformerMovementSystem);
   scene.world.add(GravitySystem);
@@ -687,6 +759,7 @@ export function registerPlatformerSystems(scene: Scene): void {
   scene.world.add(JumpSystem);
   scene.world.add(CameraFollowSystem);
   scene.world.add(HitboxSystem);
+  scene.world.add(KnockbackSystem);
   // Always registered; draws nothing unless the Game-header debug toggle is on.
   scene.world.add(HitboxDebugSystem);
 }

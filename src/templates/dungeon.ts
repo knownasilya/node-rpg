@@ -384,6 +384,8 @@ export const dungeonNodes: Node[] = [
       shapes: [{ x: -7, y: -7, w: 14, h: 14 }],
       tags: ["enemy"],
       iFrameMs: 250,
+      knockback: 140,
+      knockbackMs: 160,
     },
   },
   {
@@ -512,6 +514,8 @@ export const dungeonNodes: Node[] = [
       shapes: [{ x: -7, y: -6, w: 14, h: 12 }],
       tags: ["enemy"],
       iFrameMs: 250,
+      knockback: 160,
+      knockbackMs: 160,
     },
   },
   {
@@ -556,6 +560,91 @@ export const dungeonNodes: Node[] = [
       frameHeight: 16,
       margin: 0,
       spacing: 0,
+    },
+  },
+
+  // ---- NPC (talk-to character, scene 1) ---------------------------------
+  // Not a .tmj object class, so it spawns once from the manual `pos`. Tagged
+  // only "npc" (never "enemy"), so the player's melee never hits it. Its State
+  // Chart is the conversation graph: each state's `say` is the line shown, and
+  // every labeled transition is a dialog option. Walk up + press E to talk.
+  {
+    id: "actor-npc",
+    type: "actor",
+    position: { x: 40, y: 1900 },
+    style: { width: 240 },
+    data: {
+      label: "old man (npc)",
+      pos: { x: 96, y: 48 },
+      color: "white",
+      collision: true,
+      tags: ["npc"],
+      instances: [],
+    },
+  },
+  {
+    id: "stateChartModifier-npc",
+    type: "stateChartModifier",
+    parentId: "actor-npc",
+    position: { x: 4, y: 9999 },
+    style: SLOT,
+    data: {
+      initial: "idle",
+      resetEvent: "",
+      states: [
+        { name: "idle", say: "...zzz" },
+        { name: "greeting", say: "Oh! A visitor. Hello there, hero!" },
+        { name: "quest", say: "Slimes infest the lower halls. Will you help?" },
+        { name: "bye", say: "Good luck down there." },
+      ],
+      transitions: [
+        // No label: this is the "start" trigger the Dialog fires on press-E,
+        // so the conversation opens straight on the greeting (not "...zzz").
+        { from: "idle", to: "greeting", event: "npc-talk" },
+        { from: "greeting", to: "quest", event: "npc-quest", label: "What's wrong?" },
+        { from: "greeting", to: "bye", event: "npc-leave", label: "Leave" },
+        { from: "quest", to: "bye", event: "npc-accept", label: "I'll help" },
+        // Back to idle when the panel closes, so the ambient "...zzz" resumes.
+        { from: "bye", to: "idle", event: "npc-end" },
+      ],
+    },
+  },
+  {
+    id: "speechBubbleModifier-npc",
+    type: "speechBubbleModifier",
+    parentId: "actor-npc",
+    position: { x: 4, y: 9999 },
+    style: SLOT,
+    data: { offsetY: -14, maxWidth: 140, hideInEdit: false },
+  },
+  {
+    id: "dialogModifier-npc",
+    type: "dialogModifier",
+    parentId: "actor-npc",
+    position: { x: 4, y: 9999 },
+    style: SLOT,
+    data: {
+      targetTag: "player",
+      range: 30,
+      key: "KeyE",
+      promptText: "press E",
+      startEvent: "npc-talk",
+      endEvent: "npc-end",
+    },
+  },
+  {
+    id: "directionalAnimationModifier-npc",
+    type: "directionalAnimationModifier",
+    parentId: "actor-npc",
+    position: { x: 4, y: 9999 },
+    style: SLOT,
+    data: {
+      idleSheet: "spritesheet-skel-idle",
+      walkSheet: "spritesheet-skel-walk",
+      attackSheet: "",
+      frameDurationMs: 150,
+      attackEvent: "",
+      attackMs: 250,
     },
   },
 
@@ -627,6 +716,8 @@ export const dungeonNodes: Node[] = [
       shapes: [{ x: -7, y: -7, w: 14, h: 14 }],
       tags: ["enemy"],
       iFrameMs: 250,
+      knockback: 140,
+      knockbackMs: 160,
     },
   },
   {
@@ -787,6 +878,8 @@ export const dungeonEdges = [
   { id: "e-slime-s2", source: "actor-slime", target: "scene-2" },
   // Patrolling skeletons (template instances) live in level 1.
   { id: "e-skelpat-s1", source: "actor-skeleton-patrol", target: "scene-1" },
+
+  { id: "e-npc-s1", source: "actor-npc", target: "scene-1" },
 
   // Stairs: down only in level 1, up only in level 2.
   { id: "e-stairs-s1", source: "actor-stairs", target: "scene-1" },

@@ -14,6 +14,7 @@ import {
   setPoints,
   useCurrentState,
   useGameRect,
+  usePlayMode,
   usePoints,
 } from "./modifiers/shared";
 import { fireTower } from "./modifiers/towerCore";
@@ -50,6 +51,7 @@ export default function ToolbarNode({ id, data }: NodeProps) {
   const reactFlow = useReactFlow();
   const game = useGame();
   const gameRect = useGameRect();
+  const playMode = usePlayMode();
   const machineState = useCurrentState();
   const points = usePoints();
 
@@ -176,17 +178,26 @@ export default function ToolbarNode({ id, data }: NodeProps) {
     !hideOnScenes.includes(currentScene);
   // Dock the bar to an edge of the live game canvas (so it sits *inside* the
   // game view in both the editor preview and fullscreen play).
+  // Scale the bar with the on-screen game view (editor zoom / fullscreen),
+  // published on gameRect.scale, so it tracks the game instead of staying a
+  // fixed screen size.
+  const scale = gameRect?.scale ?? 1;
+  const sc = (n: number) => n * scale;
   const railStyle = (): Record<string, any> => {
     const r = gameRect!;
     const s: Record<string, any> = {
       position: "fixed",
-      zIndex: 2147483000,
+      // Sit just above the game canvas portal (editor z:5, play z:100) inside
+      // an isolated stacking context — not blasted to the top where it would
+      // paint over unrelated canvas nodes.
+      isolation: "isolate",
+      zIndex: playMode ? 101 : 6,
       display: "flex",
       flexDirection: orientation === "vertical" ? "column" : "row",
-      gap: 6,
+      gap: sc(6),
       alignItems: "center",
       justifyContent: "center",
-      padding: "6px 8px",
+      padding: `${sc(6)}px ${sc(8)}px`,
       background: "rgba(11,13,18,0.9)",
       border: "1px solid rgba(255,255,255,0.16)",
       fontFamily: "ui-monospace, monospace",
@@ -341,7 +352,7 @@ export default function ToolbarNode({ id, data }: NodeProps) {
         createPortal(
           <div style={railStyle()}>
             {economy && (
-              <div style={{ color: "#ffe066", fontWeight: 700, marginRight: 4 }}>💰 {points}</div>
+              <div style={{ color: "#ffe066", fontWeight: 700, marginRight: sc(4), fontSize: sc(11) }}>💰 {points}</div>
             )}
             {items.map((it, i) => {
               const cost = it.cost ?? 0;
@@ -354,7 +365,7 @@ export default function ToolbarNode({ id, data }: NodeProps) {
                   disabled={isPlace && !affordable}
                   onClick={() => {
                     if (it.kind === "emit") {
-                      if (it.event?.trim()) emit(it.event.trim(), {});
+                      if (it.event?.trim()) emit(it.event.trim(), {}, id);
                     } else {
                       setSelected(isSel ? -1 : i);
                     }
@@ -363,24 +374,24 @@ export default function ToolbarNode({ id, data }: NodeProps) {
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
-                    gap: 2,
-                    padding: "8px 12px",
-                    borderRadius: 6,
-                    border: isSel ? "2px solid #9be7ff" : "2px solid transparent",
+                    gap: sc(2),
+                    padding: `${sc(5)}px ${sc(9)}px`,
+                    borderRadius: sc(5),
+                    border: isSel ? `${sc(2)}px solid #9be7ff` : `${sc(2)}px solid transparent`,
                     background: it.kind === "emit" ? "#3fbf6b" : affordable ? "#1f2733" : "#15171c",
                     color: it.kind === "emit" ? "#08120b" : affordable ? "#fff" : "#5b6470",
                     cursor: isPlace && !affordable ? "not-allowed" : "pointer",
                     fontWeight: 700,
-                    minWidth: 56,
+                    minWidth: sc(48),
                   }}
                 >
-                  <span style={{ fontSize: 12 }}>{it.label}</span>
-                  {cost > 0 && <span style={{ fontSize: 11, color: "#ffe066" }}>💰 {cost}</span>}
+                  <span style={{ fontSize: sc(10) }}>{it.label}</span>
+                  {cost > 0 && <span style={{ fontSize: sc(9), color: "#ffe066" }}>💰 {cost}</span>}
                 </button>
               );
             })}
             {selected >= 0 && items[selected]?.kind === "place" && (
-              <div style={{ color: "#9be7ff", fontSize: 12, marginLeft: 6 }}>
+              <div style={{ color: "#9be7ff", fontSize: sc(10), marginLeft: sc(6) }}>
                 click field to place {items[selected]?.label}
               </div>
             )}

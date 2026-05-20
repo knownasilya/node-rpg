@@ -1,7 +1,9 @@
 import { useReactFlow } from "@xyflow/react";
+import { useState } from "preact/hooks";
 import { useGame } from "./App";
 import { TEMPLATE_ORDER, TEMPLATES, type TemplateName } from "./templates";
 import { Accent } from "./ui";
+import { clearEventLog, useEventLog } from "./nodes/modifiers/shared";
 
 const LAYOUT_COLUMNS: string[] = [
   "actor",
@@ -284,6 +286,24 @@ export const MODIFIER_KINDS: ItemDef[] = [
     accent: "input",
     description: "Emit an event when the actor is clicked (makes it a button).",
   },
+  {
+    kind: "stateChartModifier",
+    label: "State Chart",
+    accent: "game",
+    description: "Per-instance FSM on this actor; states drive bubbles/dialog.",
+  },
+  {
+    kind: "speechBubbleModifier",
+    label: "Speech Bubble",
+    accent: "game",
+    description: "Float the chart state's `say` text above the actor.",
+  },
+  {
+    kind: "dialogModifier",
+    label: "Dialog",
+    accent: "input",
+    description: "Walk up + press a key to open a branching NPC conversation.",
+  },
 ];
 
 export const DRAG_MIME = "application/reactflow-kind";
@@ -328,9 +348,96 @@ function DraggableItem({
   );
 }
 
+const fmtTime = (t: number) => {
+  const d = new Date(t);
+  const pad = (n: number, w = 2) => String(n).padStart(w, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
+};
+
+// Live list of recently-emitted events (newest first) with the node/modifier
+// that fired each. Subscribes to the event log only while mounted, so the log
+// costs nothing while the Events tab is closed.
+function EventLogPanel() {
+  const { log } = useEventLog();
+  const rows = log.slice().reverse();
+  return (
+    <div
+      className="nrpg-sidebar-section"
+      style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}
+    >
+      <div
+        className="nrpg-sidebar-section-title"
+        style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
+      >
+        <span>Event Log ({log.length})</span>
+        <button
+          className="nrpg-btn"
+          onClick={() => clearEventLog()}
+          title="Clear the event log"
+          disabled={log.length === 0}
+        >
+          clear
+        </button>
+      </div>
+      <div style={{ overflowY: "auto", flex: 1, minHeight: 0, marginTop: 6 }}>
+        {rows.length === 0 ? (
+          <div className="nrpg-sidebar-hint" style={{ padding: "8px 2px" }}>
+            No events yet — run the game and interact with it.
+          </div>
+        ) : (
+          rows.map((e) => (
+            <div
+              key={e.id}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 1,
+                padding: "4px 2px",
+                borderBottom: "1px solid var(--border)",
+                fontFamily: "ui-monospace, monospace",
+              }}
+            >
+              <span
+                style={{
+                  color: "var(--accent-game, #9be7ff)",
+                  fontWeight: 600,
+                  fontSize: 11,
+                  wordBreak: "break-all",
+                }}
+              >
+                {e.event}
+              </span>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "baseline",
+                  gap: 6,
+                  fontSize: 9,
+                  color: "var(--text-subtle)",
+                }}
+              >
+                <span style={{ flexShrink: 0 }}>{fmtTime(e.t)}</span>
+                {e.source && (
+                  <span
+                    style={{ color: "var(--text-muted)", wordBreak: "break-all" }}
+                    title="Node/modifier that emitted this event"
+                  >
+                    ← {e.source}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Sidebar() {
   const { setNodes, getInternalNode, getNodes, fitView } = useReactFlow();
   const game = useGame();
+  const [tab, setTab] = useState<"palette" | "events">("palette");
 
   const panToGame = () => {
     const gameNode = getNodes().find((n) => n.type === "game");
@@ -372,8 +479,32 @@ export default function Sidebar() {
     });
   };
 
+  const TabButton = ({ id, label }: { id: "palette" | "events"; label: string }) => (
+    <button
+      className="nrpg-btn"
+      onClick={() => setTab(id)}
+      style={{
+        flex: 1,
+        fontWeight: tab === id ? 700 : 400,
+        background: tab === id ? "var(--bg-subtle)" : "transparent",
+        borderBottom: tab === id ? "2px solid var(--accent-game, #9be7ff)" : "2px solid transparent",
+        borderRadius: 0,
+      }}
+    >
+      {label}
+    </button>
+  );
+
   return (
-    <div className="nrpg-sidebar">
+    <div className="nrpg-sidebar" style={{ display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--border)" }}>
+        <TabButton id="palette" label="Palette" />
+        <TabButton id="events" label="Events" />
+      </div>
+      {tab === "events" ? (
+        <EventLogPanel />
+      ) : (
+        <>
       <div className="nrpg-sidebar-section">
         <div className="nrpg-sidebar-section-title">Template</div>
         <select
@@ -423,6 +554,8 @@ export default function Sidebar() {
       <div className="nrpg-sidebar-hint">
         Drop a modifier onto an actor; nodes anywhere on the canvas.
       </div>
+        </>
+      )}
     </div>
   );
 }

@@ -44,6 +44,9 @@ import TowerModifier from "./nodes/modifiers/tower";
 import HealthSpriteModifier from "./nodes/modifiers/healthSprite";
 import SceneSwitchModifier from "./nodes/modifiers/sceneSwitch";
 import ClickModifier from "./nodes/modifiers/click";
+import StateChartModifier from "./nodes/modifiers/stateChart";
+import SpeechBubbleModifier from "./nodes/modifiers/speechBubble";
+import DialogModifier from "./nodes/modifiers/dialog";
 import ImageNode from "./nodes/assets/image";
 import SpritesheetNode from "./nodes/assets/spritesheet";
 import AnimationNode from "./nodes/assets/animation";
@@ -90,6 +93,9 @@ const nodeTypes = {
   healthSpriteModifier: HealthSpriteModifier,
   sceneSwitchModifier: SceneSwitchModifier,
   clickModifier: ClickModifier,
+  stateChartModifier: StateChartModifier,
+  speechBubbleModifier: SpeechBubbleModifier,
+  dialogModifier: DialogModifier,
   image: ImageNode,
   spritesheet: SpritesheetNode,
   animation: AnimationNode,
@@ -246,6 +252,32 @@ const modifierDefaults: Record<string, Record<string, unknown>> = {
   clickModifier: {
     eventName: "",
     hoverCursor: true,
+  },
+  stateChartModifier: {
+    initial: "idle",
+    resetEvent: "",
+    states: [
+      { name: "idle", say: "Hello there." },
+      { name: "greeting", say: "Well met!" },
+      { name: "bye", say: "Safe travels." },
+    ],
+    transitions: [
+      { from: "idle", to: "greeting", event: "npc-hi", label: "Say hi" },
+      { from: "greeting", to: "bye", event: "npc-bye", label: "Goodbye" },
+    ],
+  },
+  speechBubbleModifier: {
+    offsetY: -14,
+    maxWidth: 120,
+    hideInEdit: false,
+  },
+  dialogModifier: {
+    targetTag: "player",
+    range: 28,
+    key: "KeyE",
+    promptText: "press E",
+    startEvent: "",
+    endEvent: "",
   },
 };
 

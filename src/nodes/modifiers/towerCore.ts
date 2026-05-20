@@ -50,13 +50,13 @@ export function fireTower(
       try {
         best.kill();
       } catch {}
-      if (cfg.killEvent?.trim()) emit(cfg.killEvent.trim(), { target: best });
+      if (cfg.killEvent?.trim()) emit(cfg.killEvent.trim(), { target: best }, "tower");
     }
   } else {
     try {
       best.kill();
     } catch {}
-    if (cfg.killEvent?.trim()) emit(cfg.killEvent.trim(), { target: best });
+    if (cfg.killEvent?.trim()) emit(cfg.killEvent.trim(), { target: best }, "tower");
   }
 
   try {

@@ -202,7 +202,73 @@ type EventPayload = Record<string, unknown>;
 type EventListener = (payload: EventPayload) => void;
 const eventListeners = new Map<string, Set<EventListener>>();
 
-export function emit(event: string, payload: EventPayload = {}): void {
+// --- Event log -----------------------------------------------------------
+// A rolling buffer of recently-emitted events, recorded by `emit` so the
+// sidebar's "Events" tab can show what fired and which node/modifier emitted
+// it (the optional `source` arg below). Notifications are coalesced to one
+// per microtask so a burst of emits in a single frame causes a single
+// re-render of the log panel.
+export type EventLogEntry = {
+  id: number;
+  t: number;
+  event: string;
+  source?: string;
+};
+const EVENT_LOG_CAP = 250;
+const eventLog: EventLogEntry[] = [];
+let eventLogSeq = 0;
+const eventLogListeners = new Set<() => void>();
+let eventLogFlushQueued = false;
+function notifyEventLog(): void {
+  if (eventLogFlushQueued) return;
+  eventLogFlushQueued = true;
+  queueMicrotask(() => {
+    eventLogFlushQueued = false;
+    for (const cb of Array.from(eventLogListeners)) {
+      try {
+        cb();
+      } catch {}
+    }
+  });
+}
+function recordEvent(event: string, source?: string): void {
+  eventLog.push({ id: eventLogSeq++, t: Date.now(), event, source });
+  if (eventLog.length > EVENT_LOG_CAP) {
+    eventLog.splice(0, eventLog.length - EVENT_LOG_CAP);
+  }
+  notifyEventLog();
+}
+export function getEventLog(): EventLogEntry[] {
+  return eventLog;
+}
+export function clearEventLog(): void {
+  eventLog.length = 0;
+  notifyEventLog();
+}
+// Returns the live log array; the bumped counter forces a re-render when new
+// events arrive. Subscribers only attach while the panel is mounted, so the
+// (coalesced) notifications cost nothing when the Events tab isn't open.
+export function useEventLog(): { log: EventLogEntry[]; version: number } {
+  const [version, setVersion] = useState(eventLogSeq);
+  useEffect(() => {
+    const cb = () => setVersion(eventLogSeq);
+    eventLogListeners.add(cb);
+    cb();
+    return () => {
+      eventLogListeners.delete(cb);
+    };
+  }, []);
+  return { log: eventLog, version };
+}
+
+// `source` is an optional human label for who fired the event (a node id, a
+// system name) — recorded in the event log for debugging.
+export function emit(
+  event: string,
+  payload: EventPayload = {},
+  source?: string,
+): void {
+  recordEvent(event, source);
   const set = eventListeners.get(event);
   if (!set) return;
   // Snapshot — a listener may unsubscribe itself or another listener.
@@ -400,11 +466,41 @@ export function usePlayMode(): boolean {
   return v;
 }
 
+// The Excalibur actor id of the NPC whose Dialog panel is currently open (or
+// null). Published by the Dialog modifier so the Speech Bubble modifier can
+// hide that NPC's ambient floating bubble while the conversation panel is up —
+// otherwise the state's `say` text would show in both places at once.
+let activeDialogActorId: number | null = null;
+const activeDialogListeners = new Set<() => void>();
+export function setActiveDialogActor(id: number | null): void {
+  if (activeDialogActorId === id) return;
+  activeDialogActorId = id;
+  for (const cb of Array.from(activeDialogListeners)) {
+    try {
+      cb();
+    } catch {}
+  }
+}
+export function useActiveDialogActor(): number | null {
+  const [v, setV] = useState(activeDialogActorId);
+  useEffect(() => {
+    const cb = () => setV(activeDialogActorId);
+    activeDialogListeners.add(cb);
+    cb();
+    return () => {
+      activeDialogListeners.delete(cb);
+    };
+  }, []);
+  return v;
+}
+
 // On-screen rectangle of the game canvas (in CSS pixels), published by the
 // Game node every frame for both the editor preview and fullscreen play. HUD
 // nodes (e.g. the Toolbar) anchor to it so they render *inside the game view*
 // in either mode, instead of as a separate fullscreen-only overlay.
-export type GameRect = { x: number; y: number; w: number; h: number };
+// `scale` lets overlay UI (toolbar) size itself to track the on-screen game
+// view — in the editor it's the React Flow zoom, in fullscreen play it's 1.
+export type GameRect = { x: number; y: number; w: number; h: number; scale?: number };
 let gameRect: GameRect | null = null;
 const gameRectListeners = new Set<() => void>();
 export function setGameRect(r: GameRect | null): void {
@@ -415,7 +511,8 @@ export function setGameRect(r: GameRect | null): void {
       Math.round(r.x) === Math.round(gameRect.x) &&
       Math.round(r.y) === Math.round(gameRect.y) &&
       Math.round(r.w) === Math.round(gameRect.w) &&
-      Math.round(r.h) === Math.round(gameRect.h));
+      Math.round(r.h) === Math.round(gameRect.h) &&
+      (r.scale ?? 1) === (gameRect.scale ?? 1));
   if (same) return;
   gameRect = r;
   for (const cb of Array.from(gameRectListeners)) {

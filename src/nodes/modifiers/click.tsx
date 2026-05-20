@@ -29,7 +29,7 @@ export default function ClickModifier({ id, data, parentId }: NodeProps) {
     const unsubs: Array<() => void> = [];
     for (const actor of actors) {
       const onDown = () => {
-        emit(evt, { actor });
+        emit(evt, { actor }, id);
       };
       try {
         const sub = (actor as any).on?.("pointerdown", onDown) as
