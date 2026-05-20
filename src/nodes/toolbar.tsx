@@ -63,6 +63,10 @@ export default function ToolbarNode({ id, data }: NodeProps) {
   const orientation =
     (data.orientation as "horizontal" | "vertical" | undefined) ??
     (anchor === "left" || anchor === "right" ? "vertical" : "horizontal");
+  // Scene ids the toolbar is hidden on (e.g. a "Game Over" screen). Stored as
+  // an array; the editor field below edits it as a comma-separated list.
+  const hideOnScenes = (data.hideOnScenes as string[] | undefined) ?? [];
+  const hideOnScenesKey = hideOnScenes.join(",");
   const startingPoints = (data.startingPoints as number | undefined) ?? 0;
   const earnEvent = (data.earnEvent as string | undefined) ?? "";
   const earnAmount = (data.earnAmount as number | undefined) ?? 0;
@@ -74,6 +78,21 @@ export default function ToolbarNode({ id, data }: NodeProps) {
   const [selected, setSelected] = useState<number>(-1);
   const selectedRef = useRef(-1);
   selectedRef.current = selected;
+
+  // Track the active scene so the toolbar can hide itself on configured
+  // scenes. There's no reactive current-scene store, so poll the engine and
+  // only re-render when the name actually changes.
+  const [currentScene, setCurrentScene] = useState<string>("");
+  useEffect(() => {
+    if (hideOnScenes.length === 0) return;
+    const read = () => {
+      const name = (game.engine as any)?.currentSceneName ?? "";
+      setCurrentScene((prev) => (prev === name ? prev : name));
+    };
+    read();
+    const intv = setInterval(read, 150);
+    return () => clearInterval(intv);
+  }, [game.engine, hideOnScenesKey]);
 
   // Economy reset + earn.
   useEffect(() => {
@@ -152,7 +171,9 @@ export default function ToolbarNode({ id, data }: NodeProps) {
   }, [game.engine, itemsKey, activeState, iconSheetId]);
 
   const showToolbar =
-    !!gameRect && (!activeState || machineState.name === activeState);
+    !!gameRect &&
+    (!activeState || machineState.name === activeState) &&
+    !hideOnScenes.includes(currentScene);
   // Dock the bar to an edge of the live game canvas (so it sits *inside* the
   // game view in both the editor preview and fullscreen play).
   const railStyle = (): Record<string, any> => {
@@ -216,6 +237,24 @@ export default function ToolbarNode({ id, data }: NodeProps) {
               value={activeState}
               placeholder="(always)"
               onChange={(e) => reactFlow.updateNodeData(id, { activeState: e.currentTarget.value })}
+            />
+          </Field>
+          <Field label="hide on scenes">
+            <input
+              type="text"
+              className="nrpg-input"
+              style={{ width: 120, textAlign: "left" }}
+              value={hideOnScenesKey}
+              placeholder="e.g. scene-game-over"
+              title="Comma-separated scene ids to hide the toolbar on"
+              onChange={(e) =>
+                reactFlow.updateNodeData(id, {
+                  hideOnScenes: e.currentTarget.value
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                })
+              }
             />
           </Field>
           <Field label="anchor">

@@ -28,13 +28,12 @@ function waveSpawner(idScene: string, scene: string, pathFrom: string, waves: nu
     position: { x: 40, y: scene === "scene-1" ? 40 : 460 },
     style: { width: 240 },
     data: {
+      // Appearance/size/tags come from the connected enemy Actor prefab
+      // (actor-enemy) and its child modifiers; the spawner owns the
+      // escalating HP / speed / count below.
       label: `waves ${idScene}`,
       sceneId: scene,
       pathFrom,
-      enemySheet: ENEMY_SHEET,
-      enemyFrames: [0, 4, 8, 12],
-      enemyW: 16,
-      enemyH: 16,
       waves,
       count0: 5,
       countAdd: 3,
@@ -191,6 +190,47 @@ export const towerDefenseNodes: Node[] = [
     position: { x: 980, y: 220 },
     data: { label: "Creep Sheet", columns: 4, rows: 4, frameWidth: 16, frameHeight: 16, margin: 0, spacing: 0 },
   },
+  {
+    id: "animation-td-enemy",
+    type: "animation",
+    position: { x: 1320, y: 220 },
+    data: { label: "Creep Walk", frames: [0, 4, 8, 12], frameDurationMs: 160, strategy: "loop" },
+  },
+
+  // ---- Enemy prefab (shared by both levels) ------------------------------
+  // The creep "type": a template Actor the wave spawners clone. Its look comes
+  // from the animation modifier below; size/tags/collision live here. It has
+  // NO scene edge, so it never spawns itself — the spawners do, registering
+  // each creep under this node's instance keys so the modifier attaches.
+  {
+    id: "actor-enemy",
+    type: "actor",
+    position: { x: 980, y: 420 },
+    style: { width: 240 },
+    data: {
+      label: "creep",
+      pos: { x: 0, y: 0 },
+      width: 16,
+      height: 16,
+      color: "green",
+      collision: false,
+      tags: ["enemy"],
+    },
+  },
+  {
+    id: "animationModifier-enemy",
+    type: "animationModifier",
+    parentId: "actor-enemy",
+    position: { x: 4, y: 9999 },
+    style: SLOT,
+    data: {
+      states: {
+        idle: "animation-td-enemy",
+        run: "animation-td-enemy",
+      },
+      flipOnDirection: false,
+    },
+  },
 
   // ---- Level 1 entities --------------------------------------------------
   waveSpawner("l1", "scene-1", "tiledMap-td1", 3),
@@ -262,6 +302,7 @@ export const towerDefenseNodes: Node[] = [
     data: {
       label: "Build Toolbar",
       activeState: "BUILD",
+      hideOnScenes: ["scene-game-over"],
       anchor: "bottom",
       orientation: "horizontal",
       startingPoints: 80,
@@ -361,6 +402,10 @@ export const towerDefenseEdges = [
   // Asset chains.
   { id: "e-td-tow-img-sheet", source: "image-td-towers", target: TOWER_SHEET },
   { id: "e-td-enemy-img-sheet", source: "image-td-enemy", target: ENEMY_SHEET },
+  { id: "e-td-enemy-sheet-anim", source: ENEMY_SHEET, target: "animation-td-enemy" },
+  // Enemy prefab feeds both wave spawners (creeps are clones of it).
+  { id: "e-enemy-wave-l1", source: "actor-enemy", target: "waveSpawner-l1" },
+  { id: "e-enemy-wave-l2", source: "actor-enemy", target: "waveSpawner-l2" },
   // Level 1 entities -> scene-1.
   { id: "e-base-l1-s1", source: "actor-base-l1", target: "scene-1" },
   { id: "e-wave-l1-g1", source: "waveSpawner-l1", target: "game-1" },
