@@ -263,13 +263,19 @@ function applyRule(actor: Actor, other: Actor, rule: CollisionRule): void {
       break;
     }
     case "damage": {
-      // Lazy import to avoid a circular dep: HealthComponent lives in
-      // platformer.ts which itself imports nothing from core. We resolve the
-      // class via the actor's existing components without a static import.
+      // Resolve HealthComponent by its stable runtime shape rather than a
+      // static import (which would create a core→platformer→core cycle) or
+      // `constructor.name` (which minifies away in production builds). esbuild
+      // preserves property names, so duck-typing on current/max/onZero is safe.
       const amount = rule.damageAmount ?? 1;
       const components = (other as any).getComponents?.() ?? [];
       for (const c of components) {
-        if (c && (c as any).constructor?.name === "HealthComponent") {
+        if (
+          c &&
+          typeof (c as any).current === "number" &&
+          typeof (c as any).max === "number" &&
+          "onZero" in (c as any)
+        ) {
           (c as any).current = Math.max(0, (c as any).current - amount);
         }
       }

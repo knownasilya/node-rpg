@@ -13,6 +13,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { useGame } from "../App";
 import { Button, Field, NodeBody, NodeCard, NodeHeader } from "../ui";
 import { on } from "./modifiers/shared";
+import { HealthComponent } from "./modifiers/ecs";
 
 export default function Game({ id, data }: NodeProps) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -275,11 +276,8 @@ export default function Game({ id, data }: NodeProps) {
         const a: any = v;
         if (!a || typeof a.hasTag !== "function") continue;
         if (!a.hasTag("player")) continue;
-        const comps =
-          typeof a.getComponents === "function" ? a.getComponents() : [];
-        const hc = comps.find(
-          (c: any) => c?.constructor?.name === "HealthComponent",
-        );
+        const hc =
+          typeof a.get === "function" ? a.get(HealthComponent) : undefined;
         if (hc) {
           next = { current: hc.current, max: hc.max };
           break;
