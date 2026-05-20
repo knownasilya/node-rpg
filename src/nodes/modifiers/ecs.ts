@@ -12,6 +12,7 @@ export {
   type MovementStyle,
   MovementComponent,
   FollowerComponent,
+  ChaseComponent,
   InitialPosComponent,
   type CollisionAction,
   type CollisionRule,
@@ -20,6 +21,7 @@ export {
   TailGrowerComponent,
   InputSystem,
   MovementSystem,
+  ChaseSystem,
   LeaderHistorySystem,
   FollowerSystem,
 } from "./ecs/core";

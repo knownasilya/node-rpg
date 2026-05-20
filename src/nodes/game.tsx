@@ -459,10 +459,12 @@ export default function Game({ id, data }: NodeProps) {
                   (n.data?.color as string | undefined) ?? "#ffd700",
               }));
               if (playerHp) {
+                const filled = Math.max(0, playerHp.current);
+                const empty = Math.max(0, playerHp.max - playerHp.current);
                 pills.push({
                   key: "__player-hp",
                   anchor: "top-left",
-                  text: `HP: ${playerHp.current} / ${playerHp.max}`,
+                  text: "♥".repeat(filled) + "♡".repeat(empty),
                   color: "#ef4444",
                 });
               }

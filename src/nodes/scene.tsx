@@ -32,6 +32,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { useGame } from "../App";
 import { registerEcsSystems } from "./modifiers/ecs";
 import { registerAnimationSelectorSystem } from "./modifiers/animation";
+import { registerDirectionalAnimationSystem } from "./modifiers/directionalAnimation";
 import { getImage, getTiledMap, useAssetVersion } from "./modifiers/shared";
 
 const bgColors = {
@@ -227,6 +228,7 @@ export default function SceneNode({ id, data }: NodeProps) {
     // including .tmj-projected instances whose modifiers may have run
     // before scene assignment.
     registerAnimationSelectorSystem(scene);
+    registerDirectionalAnimationSystem(scene);
 
     // Apply this scene's .tmj projections to actor instances every
     // time the scene becomes active. With multiple scenes connected to

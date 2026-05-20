@@ -36,6 +36,8 @@ import HurtboxModifier from "./nodes/modifiers/hurtbox";
 import HealthModifier from "./nodes/modifiers/health";
 import AttackModifier from "./nodes/modifiers/attack";
 import PatrolModifier from "./nodes/modifiers/patrol";
+import ChaseModifier from "./nodes/modifiers/chase";
+import DirectionalAnimationModifier from "./nodes/modifiers/directionalAnimation";
 import SceneSwitchModifier from "./nodes/modifiers/sceneSwitch";
 import ClickModifier from "./nodes/modifiers/click";
 import ImageNode from "./nodes/assets/image";
@@ -73,6 +75,8 @@ const nodeTypes = {
   healthModifier: HealthModifier,
   attackModifier: AttackModifier,
   patrolModifier: PatrolModifier,
+  chaseModifier: ChaseModifier,
+  directionalAnimationModifier: DirectionalAnimationModifier,
   sceneSwitchModifier: SceneSwitchModifier,
   clickModifier: ClickModifier,
   image: ImageNode,
@@ -155,6 +159,7 @@ const modifierDefaults: Record<string, Record<string, unknown>> = {
     damage: 1,
     reach: 18,
     boxHeight: 16,
+    omnidirectional: false,
     targetTags: ["enemy"],
     emitEvent: "player-attacked",
   },
@@ -163,6 +168,19 @@ const modifierDefaults: Record<string, Record<string, unknown>> = {
     range: 48,
     startDirection: "right",
     pauseAtTurnMs: 0,
+  },
+  chaseModifier: {
+    targetTag: "player",
+    aggroRange: 120,
+  },
+  directionalAnimationModifier: {
+    idleSheet: "",
+    walkSheet: "",
+    attackSheet: "",
+    directionAxis: "column",
+    frameDurationMs: 120,
+    attackEvent: "",
+    attackMs: 250,
   },
   sceneSwitchModifier: {
     eventName: "",

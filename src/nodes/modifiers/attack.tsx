@@ -1,7 +1,7 @@
 import { NodeProps } from "@xyflow/react";
 import { Keys } from "excalibur";
 import { useEffect, useState } from "preact/hooks";
-import { Field, ModShell, TagsField } from "../../ui";
+import { Field, ModShell, TagsField, Toggle } from "../../ui";
 import {
   HitboxComponent,
   type BoxShape,
@@ -42,6 +42,12 @@ export default function AttackModifier({ id, data, parentId }: NodeProps) {
   const [boxHeight, setBoxHeight] = useState<number>(
     (data.boxHeight as number | undefined) ?? 16,
   );
+  // Top-down games want a swing that hits in every direction; platformers
+  // want a facing-offset box. When on, the hitbox is a square centered on
+  // the actor (side = 2*reach) and `height` is ignored.
+  const [omnidirectional, setOmnidirectional] = useState<boolean>(
+    (data.omnidirectional as boolean | undefined) ?? false,
+  );
   const [targetTags, setTargetTags] = useState<string[]>(
     (data.targetTags as string[] | undefined) ?? ["enemy"],
   );
@@ -58,6 +64,10 @@ export default function AttackModifier({ id, data, parentId }: NodeProps) {
     // multiple actors with this modifier coexist cleanly.
     const swingTimers = new Map<number, ReturnType<typeof setTimeout>>();
     const setSwingShapes = (graphics: any): BoxShape[] => {
+      if (omnidirectional) {
+        // Square centered on the actor — covers all four directions.
+        return [{ x: -reach, y: -reach, w: reach * 2, h: reach * 2 }];
+      }
       const flipped = !!graphics?.flipHorizontal;
       const x = flipped ? -reach : 0;
       const y = -boxHeight / 2;
@@ -115,6 +125,7 @@ export default function AttackModifier({ id, data, parentId }: NodeProps) {
     damage,
     reach,
     boxHeight,
+    omnidirectional,
     targetTagsKey,
     emitEvent,
   ]);
@@ -167,15 +178,22 @@ export default function AttackModifier({ id, data, parentId }: NodeProps) {
             onChange={(e) => setReach(+e.currentTarget.value)}
           />
         </Field>
-        <Field label="height">
-          <input
-            type="number"
-            min={1}
-            className="nrpg-input"
-            value={boxHeight}
-            onChange={(e) => setBoxHeight(+e.currentTarget.value)}
-          />
-        </Field>
+        {!omnidirectional && (
+          <Field label="height">
+            <input
+              type="number"
+              min={1}
+              className="nrpg-input"
+              value={boxHeight}
+              onChange={(e) => setBoxHeight(+e.currentTarget.value)}
+            />
+          </Field>
+        )}
+        <Toggle
+          label="omnidirectional"
+          checked={omnidirectional}
+          onChange={setOmnidirectional}
+        />
         <Field label="target tags">
           <TagsField
             value={targetTags}

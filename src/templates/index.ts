@@ -5,8 +5,13 @@ import {
   tiledPlatformerNodes,
   tiledPlatformerEdges,
 } from "./tiledPlatformer";
+import { dungeonNodes, dungeonEdges } from "./dungeon";
 
-export type TemplateName = "snake" | "platformer" | "tiledPlatformer";
+export type TemplateName =
+  | "snake"
+  | "platformer"
+  | "tiledPlatformer"
+  | "dungeon";
 export type TemplateEdge = { id: string; source: string; target: string };
 export interface Template {
   name: TemplateName;
@@ -34,12 +39,19 @@ export const TEMPLATES: Record<TemplateName, Template> = {
     nodes: tiledPlatformerNodes,
     edges: tiledPlatformerEdges,
   },
+  dungeon: {
+    name: "dungeon",
+    label: "Dungeon",
+    nodes: dungeonNodes,
+    edges: dungeonEdges,
+  },
 };
 
 export const TEMPLATE_ORDER: TemplateName[] = [
   "snake",
   "platformer",
   "tiledPlatformer",
+  "dungeon",
 ];
 
 const STORAGE_KEY = "nodeRpgTemplate";
@@ -47,7 +59,12 @@ const STORAGE_KEY = "nodeRpgTemplate";
 export function readStoredTemplate(): TemplateName {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw === "snake" || raw === "platformer" || raw === "tiledPlatformer")
+    if (
+      raw === "snake" ||
+      raw === "platformer" ||
+      raw === "tiledPlatformer" ||
+      raw === "dungeon"
+    )
       return raw;
   } catch {}
   return "snake";

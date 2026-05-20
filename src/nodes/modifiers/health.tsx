@@ -24,6 +24,12 @@ export default function HealthModifier({ id, data, parentId }: NodeProps) {
     for (const actor of actors) {
       const existing = actor.get(HealthComponent);
       if (existing) {
+        // Adopt a component that another modifier created with a different
+        // default (e.g. the Hurtbox modifier's fallback `HealthComponent(3)`):
+        // if it's still at full health, treat the health modifier's `max` as
+        // authoritative for the starting current too. A mid-game damaged
+        // component (current < max) keeps its current.
+        if (existing.current === existing.max) existing.current = max;
         existing.max = max;
         existing.onZero = onZero;
         existing.emitEvent = emitEvent.trim() || undefined;

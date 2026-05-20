@@ -97,6 +97,20 @@ export class InitialPosComponent extends Component {
   }
 }
 
+// Enemy chase AI. Steers toward the nearest actor carrying `targetTag` when
+// it's within `aggroRange`. Writes only a normalized heading into
+// RequestedHeadingComponent — speed is owned by the entity's
+// MovementComponent (style "velocity"), so the existing MovementSystem turns
+// that heading into velocity. Pair with a MovementComponent on the same actor.
+export class ChaseComponent extends Component {
+  constructor(
+    public targetTag: string = "player",
+    public aggroRange: number = 120,
+  ) {
+    super();
+  }
+}
+
 export type CollisionAction =
   | "kill"
   | "log"
@@ -526,9 +540,68 @@ export class FollowerSystem extends System {
   }
 }
 
+// Steers chasers toward the nearest tagged target. Runs at -90: after
+// InputSystem (-100) so it never fights player input, and before
+// MovementSystem (-50) which consumes the heading it writes. Crucially it
+// writes the heading EVERY tick (zeroing it when out of range), because
+// MovementSystem never clears a stale heading — a chaser that only wrote
+// when in-range would keep drifting after the target left aggro.
+export class ChaseSystem extends System {
+  static priority = -90;
+  systemType = SystemType.Update;
+  query: Query<
+    | typeof ChaseComponent
+    | typeof RequestedHeadingComponent
+    | typeof TransformComponent
+  >;
+  constructor(public world: World) {
+    super();
+    this.query = world.query([
+      ChaseComponent,
+      RequestedHeadingComponent,
+      TransformComponent,
+    ]);
+  }
+  update(): void {
+    const scene = this.world.scene;
+    if (!scene) return;
+    for (const e of this.query.entities) {
+      const chase = e.get(ChaseComponent);
+      const req = e.get(RequestedHeadingComponent);
+      const transform = e.get(TransformComponent);
+      if (!chase || !req || !transform) continue;
+      const tag = chase.targetTag.trim();
+      const self = transform.pos;
+      let nearest: Actor | undefined;
+      let bestD2 = Infinity;
+      if (tag) {
+        for (const a of scene.actors) {
+          if (!a.hasTag(tag)) continue;
+          const dx = a.pos.x - self.x;
+          const dy = a.pos.y - self.y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < bestD2) {
+            bestD2 = d2;
+            nearest = a;
+          }
+        }
+      }
+      if (nearest && bestD2 <= chase.aggroRange * chase.aggroRange) {
+        const dx = nearest.pos.x - self.x;
+        const dy = nearest.pos.y - self.y;
+        const len = Math.hypot(dx, dy) || 1;
+        req.heading = vec(dx / len, dy / len);
+      } else {
+        req.heading = vec(0, 0);
+      }
+    }
+  }
+}
+
 export function registerCoreEcsSystems(scene: Scene) {
   scene.world.add(InputSystem);
   scene.world.add(MovementSystem);
+  scene.world.add(ChaseSystem);
   scene.world.add(LeaderHistorySystem);
   scene.world.add(FollowerSystem);
 }

@@ -212,6 +212,18 @@ export const MODIFIER_KINDS: ItemDef[] = [
     description: "Oscillate horizontally between bounds (simple enemy AI).",
   },
   {
+    kind: "chaseModifier",
+    label: "Chase",
+    accent: "movement",
+    description: "Steer toward the nearest tagged actor within aggro range.",
+  },
+  {
+    kind: "directionalAnimationModifier",
+    label: "Directional Anim",
+    accent: "entity",
+    description: "Top-down 4-way facing: idle/walk/attack per direction.",
+  },
+  {
     kind: "sceneSwitchModifier",
     label: "Scene Switch",
     accent: "scene",
@@ -268,8 +280,14 @@ function DraggableItem({
 }
 
 export default function Sidebar() {
-  const { setNodes, getInternalNode } = useReactFlow();
+  const { setNodes, getInternalNode, getNodes, fitView } = useReactFlow();
   const game = useGame();
+
+  const panToGame = () => {
+    const gameNode = getNodes().find((n) => n.type === "game");
+    if (!gameNode) return;
+    fitView({ nodes: [{ id: gameNode.id }], duration: 500, padding: 0.3, maxZoom: 1.2 });
+  };
 
   const cleanupLayout = () => {
     setNodes((nds) => {
@@ -331,6 +349,14 @@ export default function Sidebar() {
           title="Auto-arrange top-level nodes into columns by type"
         >
           ↦ cleanup layout
+        </button>
+        <button
+          className="nrpg-btn"
+          onClick={panToGame}
+          style={{ width: "100%", marginTop: 6 }}
+          title="Center the canvas on the Game node"
+        >
+          ⊹ pan to game
         </button>
       </div>
       <div className="nrpg-sidebar-section">
