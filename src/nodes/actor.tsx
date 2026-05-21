@@ -9,6 +9,7 @@ import {
 import { useGame } from "../App";
 import { useEffect, useRef, useState } from "preact/hooks";
 import {
+  ACTOR_WIDTH,
   applyTags,
   collisionGroupForTags,
   SLOT_GAP,
@@ -148,6 +149,29 @@ export default function ActorNode({ id, data }: NodeProps) {
       );
     }
   }, [allNodes]);
+  // Keep modifier (child) cards as wide as the actor card. When the actor is
+  // resized (its node `style.width` changes), widen the children to match,
+  // minus the left/right slot inset, so they track the container.
+  useEffect(() => {
+    if (children.length === 0) return;
+    const self = reactFlow.getNode(id);
+    const selfW =
+      (typeof self?.style?.width === "number" ? (self.style.width as number) : undefined) ??
+      (typeof self?.width === "number" ? (self.width as number) : undefined) ??
+      ACTOR_WIDTH;
+    const childW = Math.max(120, Math.round(selfW - SLOT_X * 2));
+    const needs = children.some((c) => {
+      const cw = typeof c.style?.width === "number" ? (c.style.width as number) : undefined;
+      return cw !== childW;
+    });
+    if (!needs) return;
+    reactFlow.setNodes((prev) =>
+      prev.map((n) =>
+        n.parentId === id ? { ...n, style: { ...n.style, width: childW } } : n,
+      ),
+    );
+  }, [allNodes, childIds, id]);
+
   const [pos, setPos] = useState(
     (data.pos as { x: number; y: number } | undefined) ?? { x: 10, y: 10 }
   );

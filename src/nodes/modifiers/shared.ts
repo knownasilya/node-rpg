@@ -165,9 +165,11 @@ export const SLOT_WIDTH = ACTOR_WIDTH - SLOT_X * 2;
 
 // --- Collision groups -------------------------------------------------
 // Actors tagged "enemy" don't physically push (or get pushed by) actors
-// tagged "player" — the HitboxSystem's AABB checks are unaffected so
-// damage still fires on overlap. Two-pass setup so we can exclude each
-// other's category from the mask without needing mutable masks.
+// tagged "player" — physical blocking would (a) separate the bodies so the
+// contact-damage AABB no longer overlaps and (b) let a chaser shove the
+// player around. Instead the chaser keeps a standoff (ChaseComponent /
+// Patrol `stopDistance`) so it holds at the player's edge, and contact damage
+// still fires via the HitboxSystem's AABB overlap.
 const ENEMY_GROUP = CollisionGroupManager.create("enemy");
 const PLAYER_GROUP = CollisionGroupManager.create(
   "player",

@@ -1,5 +1,5 @@
-import { useEdges, useNodes, useReactFlow } from "@xyflow/react";
-import { useState } from "preact/hooks";
+import { useEdges, useNodeId, useNodes, useReactFlow } from "@xyflow/react";
+import { useRef, useState } from "preact/hooks";
 
 // Children typed as `any` to bridge the Preact-vs-React-types mismatch in this project.
 type Children = any;
@@ -26,13 +26,51 @@ export function NodeCard({
   children: Children;
   style?: Record<string, any>;
 }) {
+  const id = useNodeId();
+  const reactFlow = useReactFlow();
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Drag-to-resize (width only). We set the React Flow node's `style.width`
+  // (the same mechanism templates already use), so the card widens while its
+  // height stays content-driven — important for the Actor card, which sizes
+  // itself to its modifiers. Modifiers use ModShell (not NodeCard) and are
+  // unaffected.
+  const startResize = (e: any) => {
+    if (!id) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const startX = e.clientX as number;
+    const startW = ref.current?.offsetWidth ?? 240;
+    const zoom = reactFlow.getZoom?.() ?? 1;
+    const onMove = (ev: PointerEvent) => {
+      const w = Math.max(180, Math.round(startW + (ev.clientX - startX) / zoom));
+      reactFlow.setNodes((nodes) =>
+        nodes.map((n) =>
+          n.id === id ? { ...n, style: { ...n.style, width: w } } : n,
+        ),
+      );
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
   return (
     <div
+      ref={ref}
       className="nrpg-card"
       style={{ ["--accent" as any]: accentVar(accent), ...style }}
     >
       <div className="nrpg-card-accent" />
       {children}
+      <div
+        className="nrpg-resize-handle nodrag"
+        title="Drag to resize width"
+        onPointerDown={startResize}
+      />
     </div>
   );
 }

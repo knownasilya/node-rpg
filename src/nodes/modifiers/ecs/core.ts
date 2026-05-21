@@ -111,6 +111,10 @@ export class ChaseComponent extends Component {
   constructor(
     public targetTag: string = "player",
     public aggroRange: number = 120,
+    // Stop pursuing once within this many px of the target (center-to-center),
+    // so the chaser holds at the player's edge instead of stacking on top.
+    // 0 = chase all the way to the target center (original behavior).
+    public stopDistance: number = 0,
   ) {
     super();
   }
@@ -598,10 +602,16 @@ export class ChaseSystem extends System {
         }
       }
       if (nearest && bestD2 <= chase.aggroRange * chase.aggroRange) {
-        const dx = nearest.pos.x - self.x;
-        const dy = nearest.pos.y - self.y;
-        const len = Math.hypot(dx, dy) || 1;
-        req.heading = vec(dx / len, dy / len);
+        // Hold at the standoff distance so the chaser stops at the player's
+        // edge instead of climbing on top of it.
+        if (chase.stopDistance > 0 && bestD2 <= chase.stopDistance * chase.stopDistance) {
+          req.heading = vec(0, 0);
+        } else {
+          const dx = nearest.pos.x - self.x;
+          const dy = nearest.pos.y - self.y;
+          const len = Math.hypot(dx, dy) || 1;
+          req.heading = vec(dx / len, dy / len);
+        }
       } else {
         req.heading = vec(0, 0);
       }

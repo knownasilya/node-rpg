@@ -192,10 +192,12 @@ const modifierDefaults: Record<string, Record<string, unknown>> = {
     chaseTag: "",
     sightRange: 0,
     sightAngle: 90,
+    stopDistance: 0,
   },
   chaseModifier: {
     targetTag: "player",
     aggroRange: 90,
+    stopDistance: 0,
   },
   directionalAnimationModifier: {
     idleSheet: "",

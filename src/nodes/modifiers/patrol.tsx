@@ -54,6 +54,11 @@ export default function PatrolModifier({ id, data, parentId }: NodeProps) {
   const [sightAngle, setSightAngle] = useState<number>(
     (data.sightAngle as number | undefined) ?? 90,
   );
+  // When chasing, stop this many px from the target so the patroller holds at
+  // the player's edge instead of stacking on it. 0 = pursue to center.
+  const [stopDistance, setStopDistance] = useState<number>(
+    (data.stopDistance as number | undefined) ?? 0,
+  );
 
   useEffect(() => {
     if (actors.length === 0) return;
@@ -179,7 +184,13 @@ export default function PatrolModifier({ id, data, parentId }: NodeProps) {
             const ox = tgt.pos.x - a.pos.x;
             const oy = tgt.pos.y - a.pos.y;
             const len = Math.hypot(ox, oy) || 1;
-            if (motion) motion.vel = vec((ox / len) * state.speedI, (oy / len) * state.speedI);
+            // Face the target; stop moving once within the standoff distance.
+            const holding = stopDistance > 0 && len <= stopDistance;
+            if (motion) {
+              motion.vel = holding
+                ? vec(0, 0)
+                : vec((ox / len) * state.speedI, (oy / len) * state.speedI);
+            }
             if (req) req.heading = vec(ox / len, oy / len);
             // Edge-triggered: notify the chart it just spotted the target so an
             // author's chart can switch to a "chasing" state (drives bubbles/anim).
@@ -231,7 +242,7 @@ export default function PatrolModifier({ id, data, parentId }: NodeProps) {
       }
     }, 1000 / 60);
     return () => clearInterval(intv);
-  }, [actorsKey, speed, range, startDirection, pauseAtTurnMs, stayOnPlatform, axis, chaseTag, sightRange, sightAngle]);
+  }, [actorsKey, speed, range, startDirection, pauseAtTurnMs, stayOnPlatform, axis, chaseTag, sightRange, sightAngle, stopDistance]);
 
   return (
     <ModShell
@@ -324,6 +335,16 @@ export default function PatrolModifier({ id, data, parentId }: NodeProps) {
             className="nrpg-input"
             value={sightAngle}
             onChange={(e) => setSightAngle(+e.currentTarget.value)}
+          />
+        </Field>
+        <Field label="stop distance">
+          <input
+            type="number"
+            min={0}
+            className="nrpg-input"
+            value={stopDistance}
+            title="When chasing, stop this many px from the target (0 = pursue to center)."
+            onChange={(e) => setStopDistance(+e.currentTarget.value)}
           />
         </Field>
     </ModShell>

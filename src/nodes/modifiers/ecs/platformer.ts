@@ -587,14 +587,25 @@ export class HitboxSystem extends System {
         // Knockback: shove the (surviving) victim away from the attacker. Skip
         // on the killing blow so the death animation plays in place.
         if (vb.knockback > 0 && !died && !alreadyDead) {
-          // Directional: shove the victim the way the attack points. Fall back
-          // to the attacker→victim radial direction if the hitbox has no
-          // stamped direction (e.g. an omni swing or a contact hitbox).
+          // Direction the victim sits relative to the attacker (away vector).
+          const ax = vat.pos.x - hat.pos.x;
+          const ay = vat.pos.y - hat.pos.y;
+          const awayLen = Math.hypot(ax, ay);
+          // Prefer the attack's stamped swing direction (so it's "directional"),
+          // BUT never shove the victim toward the attacker — once the enemy
+          // overlaps/gets behind the player, a facing-only push would drive it
+          // straight INTO the player and it would stick there. If the facing
+          // points back at the attacker, use the away-from-attacker direction
+          // instead so each hit always separates them.
           let dx = hb.dirX;
           let dy = hb.dirY;
-          if (dx === 0 && dy === 0) {
-            dx = vat.pos.x - hat.pos.x;
-            dy = vat.pos.y - hat.pos.y;
+          const facingLen = Math.hypot(dx, dy);
+          if (facingLen < 0.0001) {
+            dx = ax;
+            dy = ay; // no stamped direction (omni / contact) → radial
+          } else if (awayLen > 0.0001 && dx * ax + dy * ay < 0) {
+            dx = ax;
+            dy = ay; // facing would push into the attacker → push away instead
           }
           const len = Math.hypot(dx, dy);
           if (len < 0.0001) {
@@ -737,11 +748,14 @@ export class HitboxDebugSystem extends System {
 }
 
 // Applies the transient knockback impulse, overriding heading-driven velocity
-// while the window is open. Priority 85 runs after MovementSystem (-50) and
-// HitboxSystem (80), so the push wins for the frame; Excalibur's physics then
-// integrates it (and resolves wall collisions) like any other velocity.
+// while the window is open. Priority MUST sit AFTER the velocity producers
+// (ChaseSystem -90, MovementSystem -50) but BEFORE Excalibur's built-in
+// MotionSystem integrator (priority Higher = -5) — otherwise MovementSystem
+// re-sets the chase velocity every frame and overwrites the knockback before
+// it's ever integrated, so the actor never actually moves (it just keeps
+// chasing/jittering). -10 lands in that window.
 export class KnockbackSystem extends System {
-  static priority = 85;
+  static priority = -10;
   systemType = SystemType.Update;
   query: Query<typeof KnockbackComponent | typeof MotionComponent>;
   constructor(public world: World) {

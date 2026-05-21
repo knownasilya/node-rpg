@@ -115,37 +115,57 @@ export default function AttackModifier({ id, data, parentId }: NodeProps) {
       if (!best) return undefined;
       return { x: best.pos.x - a.pos.x, y: best.pos.y - a.pos.y };
     };
-    const setSwingShapes = (a: any): BoxShape[] => {
-      if (hitboxMode === "omni") {
-        // Square centered on the actor — covers all four directions.
-        return [{ x: -reach, y: -reach, w: reach * 2, h: reach * 2 }];
-      }
+    // The unit direction the swing points, per mode. Null for "omni" (no
+    // direction → radial knockback). forwardBox({±1,0}) reproduces the old
+    // "facing" box exactly, so all directional modes share one path.
+    const swingDir = (a: any): { x: number; y: number } | null => {
+      if (hitboxMode === "omni") return null;
       if (hitboxMode === "direction") {
-        const f = getActorFacing(a) ?? headingDir(a) ?? { x: 0, y: 1 };
-        return forwardBox(f.x, f.y);
+        return getActorFacing(a) ?? headingDir(a) ?? { x: 0, y: 1 };
       }
       if (hitboxMode === "target") {
-        const f =
-          nearestTargetDir(a) ?? getActorFacing(a) ?? headingDir(a) ?? { x: 0, y: 1 };
-        return forwardBox(f.x, f.y);
+        return (
+          nearestTargetDir(a) ?? getActorFacing(a) ?? headingDir(a) ?? { x: 0, y: 1 }
+        );
       }
       // "facing": platformer left/right via graphics flip.
       const flipped = !!a.graphics?.flipHorizontal;
-      const x = flipped ? -reach : 0;
-      return [{ x, y: -boxHeight / 2, w: reach, h: boxHeight }];
+      return { x: flipped ? -1 : 1, y: 0 };
+    };
+    const setSwingShapes = (a: any): BoxShape[] => {
+      const f = swingDir(a);
+      if (!f) {
+        // Square centered on the actor — covers all four directions.
+        return [{ x: -reach, y: -reach, w: reach * 2, h: reach * 2 }];
+      }
+      return forwardBox(f.x, f.y);
     };
 
     const beginSwing = (a: any) => {
       const existing = a.get(HitboxComponent);
       const shapes = setSwingShapes(a);
+      // Stamp the swing direction so HitboxSystem can knock the victim back
+      // along the attack, not just radially.
+      const f = swingDir(a);
+      let dirX = 0;
+      let dirY = 0;
+      if (f) {
+        const len = Math.hypot(f.x, f.y) || 1;
+        dirX = f.x / len;
+        dirY = f.y / len;
+      }
+      const hbc =
+        existing ?? new HitboxComponent(shapes, damage, targetTags, true);
       if (existing) {
         existing.shapes = shapes;
         existing.damage = damage;
         existing.targetTags = targetTags;
         existing.active = true;
       } else {
-        a.addComponent(new HitboxComponent(shapes, damage, targetTags, true));
+        a.addComponent(hbc);
       }
+      hbc.dirX = dirX;
+      hbc.dirY = dirY;
       const anim = a.get(AnimationComponent);
       if (anim) anim.pin("attack", durationMs);
       if (emitEvent.trim()) emit(emitEvent.trim(), { actor: a });

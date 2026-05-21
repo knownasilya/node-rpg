@@ -19,6 +19,9 @@ export default function ChaseModifier({ id, data, parentId }: NodeProps) {
   const [aggroRange, setAggroRange] = useState<number>(
     (data.aggroRange as number | undefined) ?? 120,
   );
+  const [stopDistance, setStopDistance] = useState<number>(
+    (data.stopDistance as number | undefined) ?? 0,
+  );
 
   useEffect(() => {
     if (actors.length === 0) return;
@@ -32,8 +35,9 @@ export default function ChaseModifier({ id, data, parentId }: NodeProps) {
       if (existing) {
         existing.targetTag = targetTag;
         existing.aggroRange = aggroRange;
+        existing.stopDistance = stopDistance;
       } else {
-        a.addComponent(new ChaseComponent(targetTag, aggroRange));
+        a.addComponent(new ChaseComponent(targetTag, aggroRange, stopDistance));
       }
     }
     return () => {
@@ -41,7 +45,7 @@ export default function ChaseModifier({ id, data, parentId }: NodeProps) {
         if (a.get(ChaseComponent)) a.removeComponent(ChaseComponent);
       }
     };
-  }, [actorsKey, targetTag, aggroRange]);
+  }, [actorsKey, targetTag, aggroRange, stopDistance]);
 
   return (
     <ModShell
@@ -66,6 +70,16 @@ export default function ChaseModifier({ id, data, parentId }: NodeProps) {
           className="nrpg-input"
           value={aggroRange}
           onChange={(e) => setAggroRange(+e.currentTarget.value)}
+        />
+      </Field>
+      <Field label="stop distance">
+        <input
+          type="number"
+          min={0}
+          className="nrpg-input"
+          value={stopDistance}
+          title="Stop this many px from the target so the chaser holds at its edge (0 = chase to center)."
+          onChange={(e) => setStopDistance(+e.currentTarget.value)}
         />
       </Field>
     </ModShell>
